@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1"/>
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, user-scalable=0, minimum-scale=1.0, maximum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <title>Patients List - files</title>
+    <link rel="stylesheet" type="text/css" media="screen, projection" href="css/pacient.css"/>
+    <script type="application/javascript" src="js/iscroll.js?v4"></script>
+    <script src="js/jquery-1.7.min.js"></script>
+    <script src="js/config.js"></script>
+    <script type="text/javascript">
+
+     
+
+        var myScroll;
+
+        function abc(el) {
+            this.element = el;
+            this.element.addEventListener('touchstart', this, false);
+        }
+
+        abc.prototype = {
+            handleEvent:function (e) {
+                switch (e.type) {
+                    case 'touchstart':
+                        this.onTouchStart(e);
+                        break;
+                    case 'touchmove':
+                        this.onTouchMove(e);
+                        break;
+                    case 'touchend':
+                        this.onTouchEnd(e);
+                        break;
+                }
+            },
+
+            onTouchStart:function (e) {
+                e.preventDefault();
+                this.element.className = 'hover';
+
+                var theTarget = e.target;
+                if (theTarget.nodeType === 3) {
+                    theTarget = theTarget.parentNode;
+                }
+                theTarget = theTarget.innerText;
+
+                if (document.getElementById(theTarget)) {
+                    myScroll.scrollTo(0, -document.getElementById(theTarget).offsetTop, 0);
+                }
+                this.element.addEventListener('touchmove', this, false);
+                this.element.addEventListener('touchend', this, false);
+
+                return false;
+            },
+
+            onTouchEnd:function (e) {
+                e.preventDefault();
+                this.element.className = '';
+
+                this.element.removeEventListener('touchmove', this, false);
+                this.element.removeEventListener('touchend', this, false);
+
+                return false;
+            },
+
+            onTouchMove:function (e) {
+                e.preventDefault();
+
+                var theTarget = document.elementFromPoint(e.targetTouches[0].clientX, e.targetTouches[0].clientY);
+                if (theTarget.nodeType === 3) {
+                    theTarget = theTarget.parentNode;
+                }
+                theTarget = theTarget.innerText;
+
+                if (document.getElementById(theTarget)) {
+                    theTarget = -document.getElementById(theTarget).offsetTop;
+                    if (theTarget < myScroll.maxScroll) {
+                        theTarget = myScroll.maxScroll;
+                    }
+
+                    myScroll.scrollTo(0, theTarget, 0);
+                }
+
+                return false;
+            }
+        };
+
+        function setActiveFolder(name){
+            localStorage['folderName'] = name;
+        }
+	function setInfo(patientinfo){
+            localStorage['patientinfo'] = patientinfo;
+        }
+
+        function loaded() {
+            var id = localStorage['id'];
+            var name = localStorage['name'];
+            var idfolder = localStorage['idfolder'];
+            localStorage['active'] = '1';
+            setTimeout(function(){
+                document.getElementById('prev').addEventListener('touchstart', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    location.href = localStorage['preva'];
+
+                }, false);
+            },1000);
+            $.ajax({
+                url:server + 'files.php',
+                data:{'id':id, 'name':name, 'idfolder':idfolder,'foldername':localStorage['folderName']},
+                success:function (message) {
+				if (message=='Access denied!'){
+				location.href = 'index.html';
+				}
+                    if (message != 'error') {
+                        $('#thelist').append(message);
+                        myScroll = new iScroll('wrapper', {hScrollbar:false, vScrollbar:false});
+                        alphaIndex = new abc(document.getElementById('abc'));
+                    } else {
+                        alert(message);
+                    }
+                }
+            });
+        }
+
+        document.addEventListener('touchmove', function (e) {
+            e.preventDefault();
+        }, false);
+        document.addEventListener('DOMContentLoaded', loaded, false);
+
+        function gotoFile(id) {
+            localStorage['idfile'] = id;
+            location.href = 'viewfile.html';
+        }
+        function gotoFile2(id) {
+
+            localStorage['idfile2'] = id;
+            location.href = 'viewpdf.html';
+        }
+
+    </script>
+    <script type="text/javascript" charset="utf-8" src="phonegap.js"></script>
+    <script type="text/javascript" charset="utf-8" src="recording.js"></script>
+</head>
+<body>
+
+<div id="header">
+    <div class="group1"><a href="calendar.html"><img src="calendar.png" width="26" height="23" alt=""/></a></div>
+    <div class="group2"><a id="prev"><img src="arrow-left.png" width="23" height="23" alt=""/></a></div>
+    <div class="group3"><a id="next"><img src="arrow-right.png" width="23" height="23" alt=""/></a></div>
+    <div class="group3"><a href="canvas.html"><img src="images/icon.png" width="52" height="30" alt=""/></a></div><div class="group3"><a href="#" onclick="onClick();"><img src="record.png" width="52" height="30" alt="" id="grabadora" /></a>
+	<a href="#" onclick="uploadFile();" id="subidor"></a></div>
+	    <div class="group3"><a href="http://www.orttech.net/" target="_blank" rel="external"><img src="intra.png" alt=""/></a></div>
+
+</div>
+<div id="wrapper">
+    <div id="list">
+        <ul id="thelist">
+        </ul>
+    </div>
+</div>
+
+<div id="footer"></div>
+
+</body>
+</html>

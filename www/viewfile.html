@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, user-scalable=0, minimum-scale=1.0, maximum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Ver Ficheros</title>
+    <link rel="stylesheet" type="text/css" media="screen, projection" href="css/pacient.css"/>
+    <script src="js/jquery-1.7.min.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/swipe.js"></script>
+    <script type="text/javascript">
+
+        $(document).ready(function () {
+
+
+
+            var orientation = window.orientation;
+            switch(orientation)
+            {
+                case 90:
+                    $('.group4').css('width','600px');
+                    $('#filler').css('display','block');
+                    break;
+                case -90:
+                    $('.group4').css('width','600px');
+                    $('#filler').css('display','block');
+                    break;
+                case 0:
+                    $('.group4').css('width','500px');
+                    $('#filler').css('display','none');
+                    break;
+                case 180:
+                    $('.group4').css('width','500px');
+                    $('#filler').css('display','none');
+                    break;
+            }
+
+            var gestureX;
+            var gestFlag = false;
+            var current = 1;
+
+            document.getElementById('prev').addEventListener('touchstart', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                location.href = 'files.html';
+            }, false);
+
+            $.ajax({
+                url: server + 'viewfile.php',
+                data:{'id':localStorage['idfile'], 'idfolder':localStorage['idfolder']},
+                success:function (message) {
+				if (message=='Access denied!'){
+				location.href = 'index.html';
+				}
+                    $('#content').append(message);
+                }
+            });
+
+            $.ajax({
+                url: server + 'getfilename.php',
+                data:{'id':localStorage['idfile']},
+                success:function (message) {
+				if (message=='Access denied!'){
+				location.href = 'index.html';
+				}
+                    $('#pacient').html(message);
+                }
+            });
+
+            window.onorientationchange = function () {
+                var orientation = window.orientation;
+                switch(orientation)
+                {
+                    case 90:
+                        $('.group4').css('width','600px');
+                        $('#filler').css('display','block');
+                        break;
+                    case -90:
+                        $('.group4').css('width','600px');
+                        $('#filler').css('display','block');
+                        break;
+                    case 0:
+                        $('.group4').css('width','500px');
+                        $('#filler').css('display','none');
+                        break;
+                    case 180:
+                        $('.group4').css('width','500px');
+                        $('#filler').css('display','none');
+                        break;
+                }
+            }
+
+        });
+
+    </script>
+
+</head>
+<body style="height:1024px;">
+
+<div id="header">
+    <div class="group1"><a href="calendar.html"><img src="calendar.png" width="26" height="23" alt=""/></a></div>
+    <div class="group2"><a id="prev"><img src="arrow-left.png" width="23" height="23" alt=""/></a></div>
+    <div class="group3"><a id="next"><img src="arrow-right.png" width="23" height="23" alt=""/></a></div>
+    <div class="group4" id="pacient"></div>
+    <div class="group5">&nbsp;</div>
+</div>
+<div id="content">
+</div>
+<div id="filler"></div>
+
+</body>
+</html>

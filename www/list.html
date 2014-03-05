@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1"/>
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, user-scalable=0, minimum-scale=1.0, maximum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <title>Patients List</title>
+    <link rel="stylesheet" type="text/css" media="screen, projection" href="css/pacient.css"/>
+    <script type="application/javascript" src="js/iscroll.js"></script>
+    <script src="js/jquery-1.7.min.js"></script>
+    <script src="js/config.js"></script>
+    <script type="text/javascript">
+        $(document).ready(function () {
+
+        });
+
+        function loadPacientFolders(id,name){
+            localStorage.setItem('prev','list.html');
+            localStorage.setItem('id',id);
+            localStorage.setItem('name',name);
+            localStorage['active'] = '0';
+            location.href = 'folders.html';
+        }
+
+        var myScroll;
+
+        function abc(el) {
+            this.element = el;
+            this.element.addEventListener('touchstart', this, false);
+        }
+
+        abc.prototype = {
+            handleEvent:function (e) {
+                switch (e.type) {
+                    case 'touchstart':
+                        this.onTouchStart(e);
+                        break;
+                    case 'touchmove':
+                        this.onTouchMove(e);
+                        break;
+                    case 'touchend':
+                        this.onTouchEnd(e);
+                        break;
+                }
+            },
+
+            onTouchStart:function (e) {
+                e.preventDefault();
+                this.element.className = 'hover';
+
+                var theTarget = e.target;
+                if (theTarget.nodeType === 3) {
+                    theTarget = theTarget.parentNode;
+                }
+                theTarget = theTarget.innerText;
+
+                if (document.getElementById(theTarget)) {
+                    myScroll.scrollTo(0, -document.getElementById(theTarget).offsetTop, 0);
+                }
+                this.element.addEventListener('touchmove', this, false);
+                this.element.addEventListener('touchend', this, false);
+
+                return false;
+            },
+
+            onTouchEnd:function (e) {
+                e.preventDefault();
+                this.element.className = '';
+
+                this.element.removeEventListener('touchmove', this, false);
+                this.element.removeEventListener('touchend', this, false);
+
+                return false;
+            },
+
+            onTouchMove:function (e) {
+                e.preventDefault();
+
+                var theTarget = document.elementFromPoint(e.targetTouches[0].clientX, e.targetTouches[0].clientY);
+                if (theTarget.nodeType === 3) {
+                    theTarget = theTarget.parentNode;
+                }
+                theTarget = theTarget.innerText;
+
+                if (document.getElementById(theTarget)) {
+                    theTarget = -document.getElementById(theTarget).offsetTop;
+                    if (theTarget < myScroll.maxScroll) {
+                        theTarget = myScroll.maxScroll;
+                    }
+
+                    myScroll.scrollTo(0, theTarget, 0);
+                }
+
+                return false;
+            }
+        };
+	function lookup(inputString) {
+	
+		if(inputString.length == 0) {
+			// Hide the suggestion box.
+			$('#thelist').slideDown();
+			$('#abc').slideDown();
+			$('#suggestions').slideUp();
+			$('#buscando').html("");
+					$('#autoSuggestionsList').slideUp();
+					
+		} else {
+			$.post(server+"pacientes.php", {queryString: ""+inputString+"",'idsurgeon': localStorage['idsurgeon']}, function(data){
+				if (data=='Access denied!'){
+				location.href = 'index.html';
+				}
+				if(data.length >0) {
+				
+				$('#thelist').slideUp();
+				$('#abc').slideUp();
+				$('#autoSuggestionsList').slideDown();
+				$('#suggestions').slideDown();
+				$('#buscando').html(data);
+				}
+			});
+		}
+	} // lookup
+	
+	function fill(thisValue) {
+		$('#inputString').val(thisValue);
+		setTimeout("$('#suggestions').slideUp();", 200);
+	}
+        function loaded() {
+            $.ajax({
+                url:server+'pacients.php',
+                data: {'idsurgeon': localStorage['idsurgeon']},
+                success:function (message) {
+				if (message=='Access denied!'){
+				location.href = 'index.html';
+				}
+                    if (message != 'error') {
+					
+                        $('#thelist').append(message);
+                        var orientation = window.orientation;
+                        switch (orientation) {
+                            case 90:
+                                $('#abc li').css('height','23');
+                                break;
+                            case -90:
+                                $('#abc li').css('height','23');
+                                break;
+                            case 0:
+                                $('#abc li').css('height','33');
+                                break;
+                            case 180:
+                                $('#abc li').css('height','33');
+                                break;
+                        }
+                        window.onorientationchange = function () {
+                            var orientation = window.orientation;
+                            switch (orientation) {
+                                case 90:
+                                    $('#abc li').css('height','23');
+                                    break;
+                                case -90:
+                                    $('#abc li').css('height','23');
+                                    break;
+                                case 0:
+                                    $('#abc li').css('height','33');
+                                    break;
+                                case 180:
+                                    $('#abc li').css('height','33');
+                                    break;
+                            }
+                        }
+                        myScroll = new iScroll('wrapper', {hScrollbar:false, vScrollbar:false});
+                        alphaIndex = new abc(document.getElementById('abc'));
+                    } else {
+                        alert(message);
+                    }
+                }
+            });
+
+        }
+
+        document.addEventListener('DOMContentLoaded', loaded, false);
+
+
+    </script>
+
+
+</head>
+<body>
+<div>
+    <ul id="abc">
+        <li>A</li>
+        <li>B</li>
+        <li>C</li>
+        <li>D</li>
+        <li>E</li>
+        <li>F</li>
+        <li>G</li>
+        <li>H</li>
+        <li>I</li>
+        <li>J</li>
+        <li>K</li>
+        <li>L</li>
+        <li>M</li>
+        <li>N</li>
+        <li>O</li>
+        <li>P</li>
+        <li>Q</li>
+        <li>R</li>
+        <li>S</li>
+        <li>T</li>
+        <li>U</li>
+        <li>V</li>
+        <li>W</li>
+        <li>X</li>
+        <li>Y</li>
+        <li>Z</li>
+    </ul>
+</div>
+
+
+
+				
+				
+				
+<div id="header">
+<div class="group1"><a href="calendar.html"><img src="calendar.png" width="26" height="23" alt=""/></a> </div>
+<div class="group4"><img src="busca.png" width="26" height="27" alt=""/></div> 
+<div class="group5"><input type="text" size="30" value="" name="patient" id="inputString" onkeyup="lookup(this.value);" autocomplete="off" /></div>
+</div>
+
+
+
+				
+<div id="wrapper">
+    <div id="scroller"><div class="row" id="suggestions" style="display: none;">
+			
+				<div class="suggestionList" id="autoSuggestionsList">
+					<ul id="buscando">
+        </ul>
+				</div>	</div>
+        <ul id="thelist">
+        </ul>
+    </div>
+</div>
+
+<div id="footer"></div>
+
+</body>
+</html>
