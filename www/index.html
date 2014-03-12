@@ -25,16 +25,18 @@ $(document).ready(function() {
     var attempt = 0;
 
     $('#btn-login').click(function(){
-
+        
         $.ajax({
-            url: server + 'login.php',
+            url: server + 'login.php',            
             data: {'str':$('#login').serialize()},
             success:function(message){
+                console.log("Auth OK");
                 if(Number(message) > 0){
                     localStorage['idsurgeon'] = Number(message);
                     location.href = 'select.html';
                 } else {
-				jAlert('Usuario o password incorrecto, inténtelo de nuevo', 'Error de identificación');
+                    console.log("Auth mal");
+                    jAlert('Usuario o password incorrecto, inténtelo de nuevo', 'Error de identificación');
 				
                     $("#dialog-confirm").dialog({
                         resizable:false,
@@ -74,54 +76,14 @@ $(document).ready(function() {
                         }
                     });
                 }
+            },
+            error:function(jqXHR, textStatus, errorThrown ){
+                console.log("Error->Tipo: "+textStatus);
+                console.log("Error->Mensaje"+errorThrown);
             }
         });
-		
-		
-
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-	
-
-
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-
+        
+        console.log("llamada al AJAX finito");
     });
 
     document.getElementById('username').addEventListener('keypress', function (e) {

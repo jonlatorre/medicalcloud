@@ -15,8 +15,8 @@
 <script>
 
 $(document).ready(function () {
-
-//Variables init
+    console.log("Vamos con la inicialización");
+    //Variables init
     var action = 'draw';
     var preAction = '';
     var imgMode;
@@ -28,10 +28,10 @@ $(document).ready(function () {
 
     var isSomeChange = new Array(false, false, false, false, false, false, false, false, false, false);
 
-//IMAGE
+    //IMAGE
     var imgCoords = new Array();
     var newImage;
-    var base64Img;
+    var imagenSrc;
     var lock = false; // Locking rotate button to prevent rendering error
     var deltaX, deltaY;
     var imgMove = false;
@@ -40,7 +40,7 @@ $(document).ready(function () {
     var workCtx = document.getElementById('temp_can').getContext('2d');
 
 
-//TEXT variables
+    //TEXT variables
     var isSomeNote = false;
     var editNoteNum;
     var editedNote = false;
@@ -61,7 +61,7 @@ $(document).ready(function () {
         }
     });
 
-//UNDO - REDO feature
+    //UNDO - REDO feature
     var undoArray = new Array(10);
     var redoArray = new Array(10);
     var firstTime = true;
@@ -427,6 +427,7 @@ $(document).ready(function () {
                 redrawTextInsertDialog();
                 break;
             case 'photo':
+                console.log("somo la accion photo");
                 if (imgMove == true) {
                     workCtx.clearRect(imgCoords['x'], imgCoords['y'], imgCoords['w'], imgCoords['h']);
 
@@ -945,9 +946,8 @@ $(document).ready(function () {
                 break;
         }
     }, false);
-//---------------------------------------------------------------------
-
-//IMAGE PEGAR - CANCELAR
+    //---------------------------------------------------------------------
+    //IMAGE PEGAR - CANCELAR
     document.getElementById('img_pegar').addEventListener('touchstart', function (e) {
         e.preventDefault();
         e.stopPropagation();
@@ -957,7 +957,7 @@ $(document).ready(function () {
 
         if (rotateFlag === false) {
             var temp_img = new Image();
-            temp_img.src = base64Img;
+            temp_img.src = imagenSrc;
             temp_img.onload = function () {
                 activeCtx[activeZi].drawImage(temp_img, imgCoords['x'], imgCoords['y'], imgCoords['w'], imgCoords['h']);
                 fillUndoArray(activeZi);
@@ -1827,8 +1827,9 @@ $(document).ready(function () {
         }
     }, false);
 
-//Inserting image from gallery
+    //Inserting image from gallery
     document.getElementById('btn-gal').addEventListener('touchstart', function (e) {
+        console.log("Vamos a insertar imagen desde la galeria");
         e.stopPropagation();
         e.preventDefault();
         imgMode = 'gallery';
@@ -1851,12 +1852,15 @@ $(document).ready(function () {
             changeDialog('hide');
 
             navigator.camera.getPicture(onSuccess, onFail, {
-                sourceType:Camera.PictureSourceType.PHOTOLIBRARY
+                sourceType:Camera.PictureSourceType.PHOTOLIBRARY,
+                destinationType: Camera.DestinationType.FILE_URI 
             });
 
-            function onSuccess(imageData) {
+            function onSuccess(imageUri) {
+                console.log("Tenemos una nueva imagen");
                 newImg = new Image();
                 newImg.onload = function () {
+                    console.log("Somo el onload de newImg");
                     workCtx.drawImage(newImg, 60, 101, 600, 780);
                     imgCoords['x'] = 60;
                     imgCoords['y'] = 101;
@@ -1870,8 +1874,10 @@ $(document).ready(function () {
                     $('.rotator').css('z-index', '9999');
                     $('.resizers').css('z-index', '9999');
                 };
-                newImg.src = "data:image/png;base64," + imageData;
-                base64Img = "data:image/png;base64," + imageData;
+                newImg.src = imageUri;
+                //guardamos el uri para acceder a él posteriormente
+                imagenSrc = imageUri;
+                console.log("Foto de galeria cargada");
                 $('#btn-press').css({
                     'z-index':-9999,
                     'display':'none'
@@ -1889,8 +1895,9 @@ $(document).ready(function () {
     }, false);
 
 
-//Inserting image using camera
+    //Inserting image using camera
     document.getElementById('btn-photo').addEventListener('touchstart', function (e) {
+        console.log("Vamos a insertar imagen desde la camara");
         e.stopPropagation();
         e.preventDefault();
         imgMode = 'camera';
@@ -1912,12 +1919,23 @@ $(document).ready(function () {
             action = 'photo';
 
             navigator.camera.getPicture(onSuccess, onFail, {
-                quality:50
+                quality:50,
+                destinationType: Camera.DestinationType.FILE_URI 
             });
 
-            function onSuccess(imageData) {
-                newImg = new Image();
+            //function onSuccess(imageData) {
+            function onSuccess(imageUri) {
+                console.log("Teneos una foto en "+imageUri);
+                var newImg = new Image();
+                //esto ya está definido??
+                var workCtx = document.getElementById('temp_can').getContext('2d');
+                
+                newImg.onerror = function () {
+                    console.log("A fallado la carga de la imagen!!");
+                    
+                }
                 newImg.onload = function () {
+                    console.log("Somo el onload de newImg desde la camara");
                     workCtx.drawImage(newImg, 60, 101, 600, 780);
                     imgCoords['x'] = 60;
                     imgCoords['y'] = 101;
@@ -1931,8 +1949,11 @@ $(document).ready(function () {
                     $('.rotator').css('z-index', '9999');
                     $('.resizers').css('z-index', '9999');
                 };
-                newImg.src = "data:image/png;base64," + imageData;
-                base64Img = "data:image/png;base64," + imageData;
+                
+                newImg.src = imageUri;
+                //guardamos el uri para acceder a él posteriormente
+                imagenSrc = imageUri;
+                console.log("Foto de camara guardada!");
                 $('#btn-press').css({
                     'z-index':-9999,
                     'display':'none'
@@ -2149,6 +2170,7 @@ $(document).ready(function () {
 
     var guardarFlag = false;
     $('#dialog-guardar').click(function () {
+        console.log("Vamos a guardar!");
         if(guardarFlag === false){
             guardarFlag = true;
             $('#dialog-guardar').attr('src', 'images/guardar2-dialog-focus.png');
@@ -2162,12 +2184,14 @@ $(document).ready(function () {
             var randomName = randomString(32);
             $('.save-page-checkbox-on').each(function () {
                 var imgId = $(this).data('id');
+                console.log("Buscamos el contenido de la imagen "+imgId);
                 var imageData = document.getElementById(imgId).src;//.slice(23);
                 $.ajax({
                     type:'POST',
                     url:server + 'upload.php',
                     data:{'randomname':randomName, 'page':number, 'title':$('#nombre').val(), 'tags':$('#tags').val(), 'idpatient':localStorage['id'], 'idfolder':$('#folder').val(), 'foldername':$('#folder option:selected').text(), 'img':imageData},
                     complete:function (message) {
+                        console.log("Ajax-complete");
                         if (pagesCount === exitNumber) {
                             setTimeout(function () {
                                 $('#dialog-guardar').attr('src', 'images/guardar2-dialog-blur.png');
