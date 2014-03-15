@@ -1,0 +1,3018 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<link rel="stylesheet" href="css/all1.css"/>
+<link rel="stylesheet" href="css/jquery-eggplant.css"/>
+<script src="js/jquery-1.7.min.js"></script>
+<script src="js/jquery-ui.js"></script>
+<script src="js/config.js"></script>
+<script src="phonegap.js"></script>
+		<script src="js/jquery.alerts.js" type="text/javascript"></script>
+		<link href="css/jquery.alerts.css" rel="stylesheet" type="text/css" media="screen" />
+<script>
+
+$(document).ready(function () {
+    console.log("Vamos con la inicialización");
+    //Variables init
+    var action = 'draw';
+    var preAction = '';
+    var imgMode;
+    var zi = 1;             //added page count
+    var activeZi = 0;       // active canvas
+    var activeCtx = new Array();
+    var ctx;
+    var canvas;
+
+    var isSomeChange = new Array(false, false, false, false, false, false, false, false, false, false);
+
+    //IMAGE
+    var imgCoords = new Array();
+    var newImage;
+    var imagenSrc;
+    var lock = false; // Locking rotate button to prevent rendering error
+    var deltaX, deltaY;
+    var imgMove = false;
+    var tl = false, tr = false, tm = false, ml = false, mr = false, bl = false, bm = false, br = false, rotateFlag = false;
+
+    var workCtx = document.getElementById('temp_can').getContext('2d');
+
+
+    //TEXT variables
+    var isSomeNote = false;
+    var editNoteNum;
+    var editedNote = false;
+    var fieldCoord = new Array();
+    var notes = new Array();
+    var preTextPic;
+    var textInd = 0;
+
+    var oldX = new Array();
+    var oldY = new Array();
+
+    $('canvas').each(function () {
+        if ($(this).attr('id') != 'temp_can' && $(this).attr('id') != 'hcanvas') {
+            //console.log($(this).attr('id'));
+            canvas = document.getElementById($(this).attr('id'));
+            ctx = canvas.getContext('2d');
+            activeCtx.push(ctx);
+        }
+    });
+
+    //UNDO - REDO feature
+    var undoArray = new Array(10);
+    var redoArray = new Array(10);
+    var firstTime = true;
+
+    for (var i = 0; i < 10; i++) {
+        undoArray[i] = new Array();
+        redoArray[i] = new Array();
+        undoArray[i].push(activeCtx[i].getImageData(0, 0, 733, 881));
+        $('#redo-size').text(undoArray[i].length);
+    }
+
+
+    function fillUndoArray(index) {
+        isSomeChange[index] = true;
+        firstTime = true;
+        undoArray[index].push(activeCtx[index].getImageData(0, 0, 733, 881));
+        if (undoArray[index].length > 6) {
+            undoArray[index].shift();
+        }
+        $('#redo-size').text(undoArray[index].length);
+    }
+
+    function fillRedoArray(index) {
+        redoArray[index].push(undoArray[index].pop());
+    }
+
+    function changeCtx(index) {
+        var canId;
+        for (var i = 0; i < 10; i++) {
+            canId = '#can' + i;
+            if (i === index) {
+                $(canId).fadeIn('slow');
+                $('#pages').text((index + 1) + ' / ' + zi);
+//                action = 'draw';
+                action = 'draw';
+                preAction = '';
+                notes.length = 0;
+                textInd = 0;
+                isSomeNote = false;
+            } else {
+                $(canId).fadeOut('slow');
+            }
+        }
+    }
+
+
+    //Output present date
+    $.ajax({
+        url:server + 'getdate.php',
+        data:{'format':'minus'},
+        success:function (message) {
+		if (message=='Access denied!'){
+				location.href = 'index.html';
+				}
+            localStorage['nowDate'] = message;
+        }
+    });
+
+    $.ajax({
+        url:server + 'getdate.php',
+        data:{'format':'slash'},
+        success:function (message) {
+		if (message=='Access denied!'){
+				location.href = 'index.html';
+				}
+            $('#nowDate').text(message);
+        }
+    });
+
+
+    var gestureX;
+    var gestFlag = false;
+
+    document.getElementById('pages').addEventListener('touchstart', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        var touch = e.targetTouches[0];
+        gestureX = touch.clientX;
+        gestFlag = true;
+    }, false);
+
+    document.getElementById('pages').addEventListener('touchmove', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        var touch = e.touches[0];
+        if (gestFlag === true) {
+            if ((touch.clientX - gestureX) > 100) {
+                if (activeZi > 0) {
+                    activeZi -= 1;
+                    changeCtx(activeZi);
+                    gestFlag = false;
+                    $('#area').val("");
+                    $('#area').css({
+                        'z-index':-9999,
+                        'visibility':'hidden'
+
+                    });
+
+                    $('.resizers').css({
+                        'z-index':-9999
+                    });
+                    $('#text-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+                    $('#text-ins-dialog').css('z-index', -9999);
+                    $('#area').blur();
+                    workCtx.clearRect(0, 0, 733, 881);
+                    $('#img-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+                    $('#img-ins-dialog').css('visibility', 'hidden');
+                    $('.rotator').css('z-index', '-9999');
+                    rotateFlag = false;
+                    preAction = '';
+                }
+            }
+            if ((gestureX - touch.clientX) > 100) {
+                if (activeZi === zi - 1) {
+                    if (activeZi + 1 < 10) {
+                        zi += 1;
+                        activeZi += 1;
+                        changeCtx(zi - 1);
+                        $('#pages').text(zi + ' / ' + zi);
+                        gestFlag = false;
+                        $('#area').val("");
+                        $('#area').css({
+                            'z-index':-9999,
+                            'visibility':'hidden'
+
+                        });
+
+                        $('.resizers').css({
+                            'z-index':-9999
+                        });
+                        $('#text-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+                        $('#text-ins-dialog').css('z-index', -9999);
+                        $('#area').blur();
+                        workCtx.clearRect(0, 0, 733, 881);
+                        $('#img-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+                        $('#img-ins-dialog').css('visibility', 'hidden');
+                        $('.rotator').css('z-index', '-9999');
+                        rotateFlag = false;
+                        preAction = '';
+                    }
+                } else {
+                    activeZi += 1;
+                    changeCtx(activeZi);
+                    gestFlag = false;
+                    $('#area').val("");
+                    $('#area').css({
+                        'z-index':-9999,
+                        'visibility':'hidden'
+
+                    });
+
+                    $('.resizers').css({
+                        'z-index':-9999
+                    });
+                    $('#text-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+                    $('#text-ins-dialog').css('z-index', -9999);
+                    $('#area').blur();
+                    workCtx.clearRect(0, 0, 733, 881);
+                    $('#img-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+                    $('#img-ins-dialog').css('visibility', 'hidden');
+                    $('.rotator').css('z-index', '-9999');
+                    rotateFlag = false;
+                    preAction = '';
+                }
+            }
+        }
+    }, false);
+
+   
+   // var touchFlag = false;  multilinea
+   //touchflag es el aviso de que se bloquee el dedito para no sacar doble lineas
+
+    document.getElementById('temp_can').addEventListener('touchstart', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        changeDialog('hide');
+        var touch = e.targetTouches[0];
+        x = touch.pageX - 18;
+        y = touch.pageY - 62;
+        switch (action) {
+            case 'draw':
+       //         if (touchFlag === false) { multilinea
+                    activeCtx[activeZi].strokeStyle = $('#color > .active').css('color');
+                    activeCtx[activeZi].lineWidth = $('#text-size').val();
+                    activeCtx[activeZi].lineCap = "round";
+                    activeCtx[activeZi].beginPath();
+                    activeCtx[activeZi].moveTo(x, y);
+                    activeCtx[activeZi].lineTo(x - 0.001, y - 0.001);
+                    activeCtx[activeZi].stroke();
+                    oldX.push(x);
+                    oldY.push(y);
+         //           touchFlag = true; multilinea
+           //     } multilinea
+                break;
+            case 'rubber':
+                activeCtx[activeZi].strokeStyle = '#FFF';
+                activeCtx[activeZi].lineWidth = $('#rubber-size').val();
+                activeCtx[activeZi].lineCap = "round";
+                activeCtx[activeZi].beginPath();
+                activeCtx[activeZi].moveTo(x, y);
+                activeCtx[activeZi].lineTo(x - 0.001, y - 0.001);
+                activeCtx[activeZi].stroke();
+                oldX.push(x);
+                oldY.push(y);
+                break;
+            case 'text':
+                fieldCoord['x'] = x + 18;
+                fieldCoord['y'] = y + 62;
+                fieldCoord['x1'] = x + 19;
+                fieldCoord['y1'] = y + 63;
+                fieldCoord['w'] = fieldCoord['x1'] - fieldCoord['x'];
+                fieldCoord['h'] = fieldCoord['y1'] - fieldCoord['y'];
+                $('#area').css({
+                    'left':fieldCoord['x'] + 'px',
+                    'top':fieldCoord['y'] + 'px',
+                    'width':fieldCoord['w'] + 'px',
+                    'height':fieldCoord['h'] + 'px',
+                    'z-index':9990,
+                    'visibility':'visible'
+                });
+                $('#note-font .size-val').text($('#note-text-size').val());
+                $('#area').css('font-size', $('#note-text-size').val() + 'px');
+                limitHW(1);
+                showResizers(fieldCoord);
+                redrawTextInsertDialog();
+                $('#text-ins-dialog').css({
+                    'z-index':9999
+                });
+                if (isSomeNotes === true) {
+                    for (var i = 0; i < notes.length; i++) {
+                        if (x > (notes[i]['x'] - 18) && x < (notes[i]['x1'] - 18) && y > (notes[i]['y'] - 62) && y < (notes[i]['y1'] - 62)) {
+                            if (notes[i].isDel === true) {
+                                $('#area').val("");
+                            } else {
+                                $('#area').val(notes[i].text);
+                            }
+                            $('#area').css({
+                                'left':notes[i].x,
+                                'top':notes[i].y,
+                                'width':notes[i].w,
+                                'height':notes[i].h,
+                                'z-index':9990,
+                                'visibility':'visible'
+                            });
+                            $('#text-ins-dialog').css({
+                                'z-index':9999
+                            });
+                            fieldCoord['x'] = notes[i].x;
+                            fieldCoord['y'] = notes[i].y;
+                            fieldCoord['x1'] = notes[i].x1;
+                            fieldCoord['y1'] = notes[i].y1;
+                            fieldCoord['w'] = notes[i].w;
+                            fieldCoord['h'] = notes[i].h;
+                            $('#note-text-size').val(notes[i].size);
+                            $('#note-text-size').change();
+                            $('#note-color > *').each(function () {
+                                $(this).removeClass('active');
+                                if ($(this).css('color') === notes[i].color) {
+                                    $(this).addClass('active');
+                                }
+                            });
+                            editNoteNum = i;
+                            editedNote = true;
+                            activeCtx[activeZi].putImageData(preTextPic, 0, 0);
+                            for (var l = 0; l < notes.length; l++) {
+                                if (l != editNoteNum) {
+                                    drawNote(notes[l]);
+                                }
+                            }
+
+                            break;
+                        }
+                    }
+                }
+                redrawTextInsertDialog();
+                break;
+            case 'photo':
+                var rSize = 30;
+                var imgRectX = (imgCoords['x1'] - imgCoords['x']) / 2;
+                var imgRectY = (imgCoords['y1'] - imgCoords['y']) / 2;
+                if ((x > imgCoords['x'] && x < imgCoords['x1']) && (y > imgCoords['y'] && y < imgCoords['y1'])) {
+                    deltaX = x - imgCoords['x'];
+                    deltaY = y - imgCoords['y'];
+                    imgMove = true;
+                }
+                break;
+        }
+    }, false);
+
+    document.getElementById('temp_can').addEventListener('touchmove', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        var touch = e.targetTouches[0];
+        x = touch.pageX - 18;
+        y = touch.pageY - 62;
+		
+        switch (action) {
+            case 'draw':
+           //     if (touchFlag === true) {  multilinea
+                    activeCtx[activeZi].beginPath();
+                    var x1 = oldX.pop();
+                    var y1 = oldY.pop();
+                    activeCtx[activeZi].moveTo(x, y);
+                    //Make line smoother
+					
+                    activeCtx[activeZi].lineTo((x1 + x) / 2, (y1 + y) / 2);
+                    activeCtx[activeZi].moveTo((x1 + x) / 2, (y1 + y) / 2);
+                    //
+                    activeCtx[activeZi].lineTo(x1, y1);
+                    activeCtx[activeZi].stroke();
+                    oldX.push(x);
+                    oldY.push(y);
+                //} multilinea
+
+                break;
+            case 'rubber':
+                activeCtx[activeZi].beginPath();
+                var x1 = oldX.pop();
+                var y1 = oldY.pop();
+                activeCtx[activeZi].moveTo(x, y);
+                //Make line smoother
+                activeCtx[activeZi].lineTo((x1 + x) / 2, (y1 + y) / 2);
+                activeCtx[activeZi].moveTo((x1 + x) / 2, (y1 + y) / 2);
+                //
+                activeCtx[activeZi].lineTo(x1, y1);
+                activeCtx[activeZi].stroke();
+                oldX.push(x);
+                oldY.push(y);
+                break;
+            case 'text':
+                if (x > 733) {
+                    x = 733;
+                }
+                if (y > 881) {
+                    y = 879;
+                }
+                if (x < 0) {
+                    x = 0;
+                }
+                if (y < 0) {
+                    y = 0;
+                }
+                fieldCoord['x1'] = x + 18;
+                fieldCoord['y1'] = y + 62;
+                fieldCoord['w'] = fieldCoord['x1'] - fieldCoord['x'];
+                fieldCoord['h'] = fieldCoord['y1'] - fieldCoord['y'];
+                if (fieldCoord['x1'] < fieldCoord['x']) {
+                    fieldCoord['x1'] = fieldCoord['x'];
+                }
+                if (fieldCoord['y1'] < fieldCoord['y']) {
+                    fieldCoord['y1'] = fieldCoord['y'];
+                }
+
+                $('#area').css({
+                    'left':fieldCoord['x'] + 'px',
+                    'top':fieldCoord['y'] + 'px',
+                    'width':fieldCoord['w'] + 'px',
+                    'height':fieldCoord['h'] + 'px',
+                    'z-index':9990,
+                    'visibility':'visible'
+                });
+                showResizers(fieldCoord);
+                redrawTextInsertDialog();
+                break;
+            case 'photo':
+                console.log("somo la accion photo");
+                if (imgMove == true) {
+                    workCtx.clearRect(imgCoords['x'], imgCoords['y'], imgCoords['w'], imgCoords['h']);
+
+                    imgCoords['x'] = x - deltaX;
+                    imgCoords['y'] = y - deltaY;
+                    imgCoords['x1'] = imgCoords['x'] + imgCoords['w'];
+                    imgCoords['y1'] = imgCoords['y'] + imgCoords['h'];
+
+                    if (imgCoords['x1'] > 733) {
+                        imgCoords['x1'] = 733;
+                        imgCoords['x'] = imgCoords['x1'] - imgCoords['w'];
+
+                    }
+                    if (imgCoords['y1'] > 881) {
+                        imgCoords['y1'] = 881;
+                        imgCoords['y'] = imgCoords['y1'] - imgCoords['h'];
+                    }
+
+                    if (imgCoords['x'] <= 0) {
+                        imgCoords['x'] = 0;
+                        imgCoords['x1'] = imgCoords['x'] + imgCoords['w'];
+                    }
+                    if (imgCoords['y'] <= 0) {
+                        imgCoords['y'] = 0;
+                        imgCoords['y1'] = imgCoords['y'] + imgCoords['h'];
+                    }
+//
+                    imgCoords['w'] = imgCoords['x1'] - imgCoords['x'];
+                    imgCoords['h'] = imgCoords['y1'] - imgCoords['y'];
+
+                    workCtx.drawImage(newImg, imgCoords['x'], imgCoords['y'], imgCoords['w'], imgCoords['h']);
+                    showResizers(imgCoords);
+                    redrawImgInsertDialog();
+                }
+                break;
+        }
+    }, false);
+
+    var preventer = 0;
+
+    document.getElementById('temp_can').addEventListener('touchend', function (e) {
+	
+        e.stopPropagation();
+        e.preventDefault();
+        switch (action) {
+            case 'draw':
+             //   touchFlag = false; multilinea
+                oldX.pop();
+                oldY.pop();
+                fillUndoArray(activeZi);
+                redoArray[activeZi] = [];
+                break;
+            case 'rubber':
+                oldX.pop();
+                oldY.pop();
+                fillUndoArray(activeZi);
+                redoArray[activeZi] = [];
+                break;
+            case 'text':
+                limitHW(170);
+				//ampliacion del alto del cuadro de texto
+                showResizers(fieldCoord);
+                redrawTextInsertDialog();
+                $('#area').focus();
+                break;
+            case 'photo':
+                tl = false;
+                tr = false;
+                tm = false;
+                ml = false;
+                mr = false;
+                bl = false;
+                bm = false;
+                br = false;
+                imgMove = false;
+                break;
+        }
+    }, false);
+
+//TOP LEFT RESIZER
+    document.getElementById('tl_res').addEventListener('touchmove', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        changeDialog('hide');
+        var touch = e.targetTouches[0];
+        x = touch.pageX - 18;
+        y = touch.pageY - 62;
+        if (x < 0) {
+            x = 0;
+        }
+        if (y < 0) {
+            y = 0;
+        }
+        if (x > 733) {
+            x = 733;
+        }
+        if (y > 873) {
+            y = 873;
+        }
+        if (x > imgCoords['x1'] - 30) {
+            x = imgCoords['x1'] - 30;
+        }
+        if (y > imgCoords['y1'] - 30) {
+            y = imgCoords['y1'] - 30;
+        }
+        switch (action) {
+            case 'photo':
+                workCtx.clearRect(0, 0, 733, 881);
+
+                imgCoords['x'] = x;
+                imgCoords['y'] = y;
+                imgCoords['w'] = imgCoords['x1'] - imgCoords['x'];
+                imgCoords['h'] = imgCoords['y1'] - imgCoords['y'];
+                workCtx.drawImage(newImg, imgCoords['x'], imgCoords['y'], imgCoords['w'], imgCoords['h']);
+                showResizers(imgCoords);
+                redrawImgInsertDialog();
+                break;
+            case 'text':
+                fieldCoord['x'] = x + 18;
+                fieldCoord['y'] = y + 62;
+                if (fieldCoord['x1'] < fieldCoord['x']) {
+                    fieldCoord['x1'] = fieldCoord['x'];
+                }
+                if (fieldCoord['y1'] < fieldCoord['y']) {
+                    fieldCoord['y1'] = fieldCoord['y'];
+                }
+                fieldCoord['w'] = fieldCoord['x1'] - fieldCoord['x'];
+                fieldCoord['h'] = fieldCoord['y1'] - fieldCoord['y'];
+
+
+                $('#area').css({
+                    'left':fieldCoord['x'] + 'px',
+                    'top':fieldCoord['y'] + 'px',
+                    'width':fieldCoord['w'] + 'px',
+                    'height':fieldCoord['h'] + 'px'
+                });
+                showResizers(fieldCoord);
+                redrawTextInsertDialog();
+                break;
+        }
+    }, false);
+
+//BOTTOM RIGHT RESIZER
+    document.getElementById('br_res').addEventListener('touchmove', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        changeDialog('hide');
+        var touch = e.targetTouches[0];
+        x = touch.pageX - 18;
+        y = touch.pageY - 62;
+        if (x > 733) {
+            x = 733;
+        }
+        if (y > 881) {
+            y = 881;
+        }
+        if (x < imgCoords['x'] + 30) {
+            x = imgCoords['x'] + 30;
+        }
+        if (y < imgCoords['y'] + 30) {
+            y = imgCoords['y'] + 30;
+        }
+        switch (action) {
+            case 'photo':
+                workCtx.clearRect(0, 0, 733, 881);
+
+                imgCoords['x1'] = x;
+                imgCoords['y1'] = y;
+                imgCoords['w'] = imgCoords['x1'] - imgCoords['x'];
+                imgCoords['h'] = imgCoords['y1'] - imgCoords['y'];
+
+                workCtx.drawImage(newImg, imgCoords['x'], imgCoords['y'], imgCoords['w'], imgCoords['h']);
+                showResizers(imgCoords);
+                redrawImgInsertDialog();
+                break;
+            case 'text':
+                fieldCoord['x1'] = x + 18;
+                fieldCoord['y1'] = y + 62;
+                if (fieldCoord['x1'] < fieldCoord['x']) {
+                    fieldCoord['x1'] = fieldCoord['x'];
+                }
+                if (fieldCoord['y1'] < fieldCoord['y']) {
+                    fieldCoord['y1'] = fieldCoord['y'];
+                }
+                fieldCoord['w'] = fieldCoord['x1'] - fieldCoord['x'];
+                fieldCoord['h'] = fieldCoord['y1'] - fieldCoord['y'];
+
+
+                $('#area').css({
+//                        'left' : fieldCoord['x'] + 'px',
+//                        'top'  : fieldCoord['y'] + 'px',
+                    'width':fieldCoord['w'] + 'px',
+                    'height':fieldCoord['h'] + 'px'
+                });
+                showResizers(fieldCoord);
+                redrawTextInsertDialog();
+                break;
+        }
+    }, false);
+
+//TOP RIGHT RESIZER
+    document.getElementById('tr_res').addEventListener('touchmove', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        changeDialog('hide');
+        var touch = e.targetTouches[0];
+        x = touch.pageX - 18;
+        y = touch.pageY - 62;
+        if (x > 733) {
+            x = 733;
+        }
+        if (y < 0) {
+            y = 0;
+        }
+        if (y > 879) {
+            y = 879;
+        }
+
+        if (x < imgCoords['x'] + 30) {
+            x = imgCoords['x'] + 30;
+        }
+        if (y > imgCoords['y1'] - 30) {
+            y = imgCoords['y1'] - 30;
+        }
+        switch (action) {
+            case 'photo':
+                workCtx.clearRect(0, 0, 733, 881);
+
+                imgCoords['x1'] = x;
+                imgCoords['y'] = y;
+                imgCoords['w'] = imgCoords['x1'] - imgCoords['x'];
+                imgCoords['h'] = imgCoords['y1'] - imgCoords['y'];
+
+                workCtx.drawImage(newImg, imgCoords['x'], imgCoords['y'], imgCoords['w'], imgCoords['h']);
+                showResizers(imgCoords);
+                redrawImgInsertDialog();
+                break;
+            case 'text':
+                fieldCoord['x1'] = x + 18;
+                fieldCoord['y'] = y + 62;
+                if (fieldCoord['x1'] < fieldCoord['x']) {
+                    fieldCoord['x1'] = fieldCoord['x'];
+                }
+                if (fieldCoord['y1'] < fieldCoord['y']) {
+                    fieldCoord['y1'] = fieldCoord['y'];
+                }
+                fieldCoord['w'] = fieldCoord['x1'] - fieldCoord['x'];
+                fieldCoord['h'] = fieldCoord['y1'] - fieldCoord['y'];
+
+                $('#area').css({
+                    'top':fieldCoord['y'] + 'px',
+                    'width':fieldCoord['w'] + 'px',
+                    'height':fieldCoord['h'] + 'px'
+                });
+                showResizers(fieldCoord);
+                redrawTextInsertDialog();
+                break;
+        }
+    }, false);
+//BOTTOM LEFT RES
+    document.getElementById('bl_res').addEventListener('touchmove', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        changeDialog('hide');
+        var touch = e.targetTouches[0];
+
+        x = touch.pageX - 18;
+        y = touch.pageY - 62;
+        if (x < 0) {
+            x = 0;
+        }
+        if (y > 881) {
+            y = 881;
+        }
+        if (x > 733) {
+            x = 733;
+        }
+        if (y > 879) {
+            y = 879;
+        }
+        if (x > imgCoords['x1'] - 30) {
+            x = imgCoords['x1'] - 30;
+        }
+        if (y < imgCoords['y'] + 30) {
+            y = imgCoords['y'] + 30;
+        }
+        switch (action) {
+            case 'photo':
+                workCtx.clearRect(0, 0, 733, 881);
+                imgCoords['x'] = x;
+                imgCoords['y1'] = y;
+                imgCoords['w'] = imgCoords['x1'] - imgCoords['x'];
+                imgCoords['h'] = imgCoords['y1'] - imgCoords['y'];
+
+                workCtx.drawImage(newImg, imgCoords['x'], imgCoords['y'], imgCoords['w'], imgCoords['h']);
+                showResizers(imgCoords);
+                redrawImgInsertDialog();
+                break;
+            case 'text':
+                fieldCoord['x'] = x + 18;
+                fieldCoord['y1'] = y + 62;
+                if (fieldCoord['x1'] < fieldCoord['x']) {
+                    fieldCoord['x1'] = fieldCoord['x'];
+                }
+                if (fieldCoord['y1'] < fieldCoord['y']) {
+                    fieldCoord['y1'] = fieldCoord['y'];
+                }
+                fieldCoord['w'] = fieldCoord['x1'] - fieldCoord['x'];
+                fieldCoord['h'] = fieldCoord['y1'] - fieldCoord['y'];
+
+                $('#area').css({
+                    'left':fieldCoord['x'] + 'px',
+                    'top':fieldCoord['y'] + 'px',
+                    'width':fieldCoord['w'] + 'px',
+                    'height':fieldCoord['h'] + 'px'
+                });
+                showResizers(fieldCoord);
+                redrawTextInsertDialog();
+                break;
+        }
+    }, false);
+//TOP MID RES
+    document.getElementById('tm_res').addEventListener('touchmove', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        changeDialog('hide');
+        var touch = e.targetTouches[0];
+        x = touch.pageX - 18;
+        y = touch.pageY - 62;
+        if (y < 0) {
+            y = 0;
+        }
+        if (y > imgCoords['y1'] - 30) {
+            y = imgCoords['y1'] - 30;
+        }
+        if (y > 879) {
+            y = 879;
+        }
+        switch (action) {
+            case 'photo':
+                workCtx.clearRect(0, 0, 733, 881);
+
+                imgCoords['y'] = y;
+                imgCoords['w'] = imgCoords['x1'] - imgCoords['x'];
+                imgCoords['h'] = imgCoords['y1'] - imgCoords['y'];
+
+                workCtx.drawImage(newImg, imgCoords['x'], imgCoords['y'], imgCoords['w'], imgCoords['h']);
+                showResizers(imgCoords);
+                redrawImgInsertDialog();
+                break;
+            case 'text':
+                fieldCoord['y'] = y + 62;
+                if (fieldCoord['x1'] < fieldCoord['x']) {
+                    fieldCoord['x1'] = fieldCoord['x'];
+                }
+                if (fieldCoord['y1'] < fieldCoord['y']) {
+                    fieldCoord['y1'] = fieldCoord['y'];
+                }
+                fieldCoord['w'] = fieldCoord['x1'] - fieldCoord['x'];
+                fieldCoord['h'] = fieldCoord['y1'] - fieldCoord['y'];
+                $('#area').css({
+                    'top':fieldCoord['y'] + 'px',
+                    'width':fieldCoord['w'] + 'px',
+                    'height':fieldCoord['h'] + 'px'
+                });
+                showResizers(fieldCoord);
+                redrawTextInsertDialog();
+                break;
+        }
+    }, false);
+
+//BOTTOM MID RES
+    document.getElementById('bm_res').addEventListener('touchmove', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        changeDialog('hide');
+        var touch = e.targetTouches[0];
+        x = touch.pageX - 18;
+        y = touch.pageY - 62;
+        if (y > 881) {
+            y = 881;
+        }
+        if (y < imgCoords['y'] + 30) {
+            y = imgCoords['y'] + 30;
+        }
+        switch (action) {
+            case 'photo':
+                workCtx.clearRect(0, 0, 733, 881);
+
+                imgCoords['y1'] = y;
+                imgCoords['w'] = imgCoords['x1'] - imgCoords['x'];
+                imgCoords['h'] = imgCoords['y1'] - imgCoords['y'];
+
+                workCtx.drawImage(newImg, imgCoords['x'], imgCoords['y'], imgCoords['w'], imgCoords['h']);
+                showResizers(imgCoords);
+                redrawImgInsertDialog();
+                break;
+            case 'text':
+                fieldCoord['y1'] = y + 62;
+                if (fieldCoord['x1'] < fieldCoord['x']) {
+                    fieldCoord['x1'] = fieldCoord['x'];
+                }
+                if (fieldCoord['y1'] < fieldCoord['y']) {
+                    fieldCoord['y1'] = fieldCoord['y'];
+                }
+                fieldCoord['w'] = fieldCoord['x1'] - fieldCoord['x'];
+                fieldCoord['h'] = fieldCoord['y1'] - fieldCoord['y'];
+                $('#area').css({
+                    'width':fieldCoord['w'] + 'px',
+                    'height':fieldCoord['h'] + 'px'
+                });
+                showResizers(fieldCoord);
+                redrawTextInsertDialog();
+                break;
+        }
+    }, false);
+
+//MID LEFT RES
+    document.getElementById('ml_res').addEventListener('touchmove', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        changeDialog('hide');
+        var touch = e.targetTouches[0];
+        x = touch.pageX - 18;
+        y = touch.pageY - 62;
+        if (x < 0) {
+            x = 0;
+        }
+        if (x > 733) {
+            x = 733;
+        }
+        if (y > 873) {
+            y = 873;
+        }
+
+        if (x > imgCoords['x1'] - 30) {
+            x = imgCoords['x1'] - 30;
+        }
+        switch (action) {
+            case 'photo':
+                workCtx.clearRect(0, 0, 733, 881);
+
+                imgCoords['x'] = x;
+                imgCoords['w'] = imgCoords['x1'] - imgCoords['x'];
+                imgCoords['h'] = imgCoords['y1'] - imgCoords['y'];
+
+                workCtx.drawImage(newImg, imgCoords['x'], imgCoords['y'], imgCoords['w'], imgCoords['h']);
+                showResizers(imgCoords);
+                redrawImgInsertDialog();
+                break;
+            case 'text':
+                fieldCoord['x'] = x + 18;
+                if (fieldCoord['x1'] < fieldCoord['x']) {
+                    fieldCoord['x1'] = fieldCoord['x'];
+                }
+                if (fieldCoord['y1'] < fieldCoord['y']) {
+                    fieldCoord['y1'] = fieldCoord['y'];
+                }
+                fieldCoord['w'] = fieldCoord['x1'] - fieldCoord['x'];
+                fieldCoord['h'] = fieldCoord['y1'] - fieldCoord['y'];
+                $('#area').css({
+                    'left':fieldCoord['x'] + 'px',
+                    'width':fieldCoord['w'] + 'px',
+                    'height':fieldCoord['h'] + 'px'
+                });
+                showResizers(fieldCoord);
+                redrawTextInsertDialog();
+                break;
+        }
+    }, false);
+
+    document.getElementById('mr_res').addEventListener('touchmove', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        changeDialog('hide');
+        var touch = e.targetTouches[0];
+        x = touch.pageX - 18;
+        y = touch.pageY - 62;
+        if (x > 733) {
+            x = 733;
+        }
+        if (y > 873) {
+            y = 873;
+        }
+        if (x < imgCoords['x'] + 30) {
+            x = imgCoords['x'] + 30;
+        }
+        switch (action) {
+            case 'photo':
+                workCtx.clearRect(0, 0, 733, 881);
+
+                imgCoords['x1'] = x;
+                imgCoords['w'] = imgCoords['x1'] - imgCoords['x'];
+                imgCoords['h'] = imgCoords['y1'] - imgCoords['y'];
+
+                workCtx.drawImage(newImg, imgCoords['x'], imgCoords['y'], imgCoords['w'], imgCoords['h']);
+                showResizers(imgCoords);
+                redrawImgInsertDialog();
+                break;
+            case 'text':
+                fieldCoord['x1'] = x + 18;
+                if (fieldCoord['x1'] < fieldCoord['x']) {
+                    fieldCoord['x1'] = fieldCoord['x'];
+                }
+                if (fieldCoord['y1'] < fieldCoord['y']) {
+                    fieldCoord['y1'] = fieldCoord['y'];
+                }
+                fieldCoord['w'] = fieldCoord['x1'] - fieldCoord['x'];
+                fieldCoord['h'] = fieldCoord['y1'] - fieldCoord['y'];
+                $('#area').css({
+                    'width':fieldCoord['w'] + 'px',
+                    'height':fieldCoord['h'] + 'px'
+                });
+                showResizers(fieldCoord);
+                redrawTextInsertDialog();
+                break;
+        }
+    }, false);
+    //---------------------------------------------------------------------
+    //IMAGE PEGAR - CANCELAR
+    document.getElementById('img_pegar').addEventListener('touchstart', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        $('#img-ins-dialog').css('background', 'url(images/paste-img-paste.png) no-repeat');
+        workCtx.clearRect(0, 0, 733, 881);
+
+        if (rotateFlag === false) {
+            var temp_img = new Image();
+            temp_img.src = imagenSrc;
+            temp_img.onload = function () {
+                activeCtx[activeZi].drawImage(temp_img, imgCoords['x'], imgCoords['y'], imgCoords['w'], imgCoords['h']);
+                fillUndoArray(activeZi);
+            }
+        } else {
+            activeCtx[activeZi].drawImage(newImg, imgCoords['x'], imgCoords['y'], imgCoords['w'], imgCoords['h']);
+            fillUndoArray(activeZi);
+        }
+        redoArray[activeZi] = [];
+
+        setTimeout(function () {
+            $('#img-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+            $('#img-ins-dialog').css('visibility', 'hidden');
+            rotateFlag = false;
+            $('.rotator').css('z-index', '-9999');
+            $('.resizers').css('z-index', '-9999');
+            switch (preAction) {
+                case 'text':
+                    $('.resizers').css({
+                        'z-index':-9999
+                    });
+                    workCtx.clearRect(0, 0, 733, 881);
+                    $('#img-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+                    $('#img-ins-dialog').css('visibility', 'hidden');
+                    $('.rotator').css('z-index', '-9999');
+                    rotateFlag = false;
+                    action = 'text';
+                    preAction = action;
+                    preTextPic = activeCtx[activeZi].getImageData(0, 0, 733, 881);
+                    isSomeNote = false;
+                    break;
+                case 'draw':
+                    action = 'draw';
+                    break;
+                default:
+                    action = 'draw';
+                    break;
+            }
+        }, 200);
+
+    });
+
+    document.getElementById('img_cancelar').addEventListener('touchstart', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        $('#img-ins-dialog').css('background', 'url(images/paste-img-cancel.png) no-repeat');
+        $("#confirm-img-del").dialog({
+            resizable:false,
+            height:140,
+            zIndex:99999,
+            modal:true,
+            buttons:{
+                "Si":function () {
+                    $(this).dialog("close");
+                    workCtx.clearRect(0, 0, 733, 881);
+                    setTimeout(function () {
+                        $('#img-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+                        $('#img-ins-dialog').css('visibility', 'hidden');
+                        $('.rotator').css('z-index', '-9999');
+                        $('.resizers').css('z-index', '-9999');
+                        rotateFlag = false;
+                        switch (preAction) {
+                            case 'text':
+                                $('.resizers').css({
+                                    'z-index':-9999
+                                });
+                                workCtx.clearRect(0, 0, 733, 881);
+                                $('#img-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+                                $('#img-ins-dialog').css('visibility', 'hidden');
+                                $('.rotator').css('z-index', '-9999');
+                                rotateFlag = false;
+                                action = 'text';
+                                preAction = action;
+                                preTextPic = activeCtx[activeZi].getImageData(0, 0, 733, 881);
+                                isSomeNote = false;
+                                break;
+                            case 'draw':
+                                action = 'draw';
+                                break;
+                            default:
+                                action = 'draw';
+                                break;
+                        }
+                    }, 200);
+                },
+                "No":function () {
+                    $(this).dialog("close");
+                    $('#img-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+                    switch (preAction) {
+                        case 'text':
+                            $('.resizers').css({
+                                'z-index':-9999
+                            });
+                            workCtx.clearRect(0, 0, 733, 881);
+                            $('#img-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+                            $('#img-ins-dialog').css('visibility', 'hidden');
+                            $('.rotator').css('z-index', '-9999');
+                            rotateFlag = false;
+                            action = 'text';
+                            preAction = action;
+                            preTextPic = activeCtx[activeZi].getImageData(0, 0, 733, 881);
+                            isSomeNote = false;
+                            break;
+                        case 'draw':
+                            action = 'draw';
+                            break;
+                        default:
+                            action = 'draw';
+                            break;
+                    }
+                }
+            }
+        });
+    });
+
+
+    document.getElementById('rotateL').addEventListener('touchstart', function (e) {
+        if (lock === false) {
+            var x = Math.round($(e.target).offset().left) - 10;
+            var y = Math.round($(e.target).offset().top) - 10;
+            $('#btn-press').css({
+                'z-index':9999,
+                'left':x,
+                'top':y,
+                'display':'block'
+            });
+            lock = true;
+            $('#hcanvas').attr({'width':imgCoords['w'], 'height':imgCoords['h']});
+            var hcan = document.getElementById('hcanvas');
+            var hctx = hcan.getContext('2d');
+            hctx.drawImage(newImg, 0, 0, imgCoords['w'], imgCoords['h']);
+            $('#hcanvas').attr({'width':imgCoords['h'],
+                'height':imgCoords['w']});
+            hctx.translate(imgCoords['h'] / 2, imgCoords['w'] / 2); //FIX: WTF: 100px??????????????????
+            hctx.rotate(-90 * Math.PI / 180);
+            hctx.drawImage(newImg, -imgCoords['w'] / 2, -imgCoords['h'] / 2, imgCoords['w'], imgCoords['h']);
+
+            var hiddenImg = hcan.toDataURL();
+            newImg.src = hiddenImg;
+            newImg.onload = function () {
+                var temp = imgCoords['h'];
+                imgCoords['h'] = imgCoords['w'];
+                imgCoords['w'] = temp;
+                imgCoords['x1'] = imgCoords['x'] + imgCoords['w'];
+                imgCoords['y1'] = imgCoords['y'] + imgCoords['h'];
+                if (imgCoords['x1'] > 733) {
+                    imgCoords['x1'] = 733;
+                    imgCoords['w'] = imgCoords['x1'] - imgCoords['x'];
+                }
+                if (imgCoords['y1'] > 881) {
+                    imgCoords['y1'] = 881;
+                    imgCoords['h'] = imgCoords['y1'] - imgCoords['y'];
+                }
+                workCtx.clearRect(0, 0, 733, 881);
+                setTimeout(function () {
+                    workCtx.drawImage(newImg, imgCoords['x'], imgCoords['y'], imgCoords['w'], imgCoords['h']);
+                    lock = false;
+                }, 50);
+                rotateFlag = true;
+                showResizers(imgCoords);
+            };
+            hctx.clearRect(0, 0, 733, 881);
+            $('#hcanvas').removeAttr('width');
+            $('#hcanvas').removeAttr('height');
+        }
+    }, false);
+
+    document.getElementById('rotateR').addEventListener('touchstart', function (e) {
+        if (lock === false) {
+            var x = Math.round($(e.target).offset().left) - 10;
+            var y = Math.round($(e.target).offset().top) - 10;
+            $('#btn-press').css({
+                'z-index':9999,
+                'left':x,
+                'top':y,
+                'display':'block'
+            });
+            lock = true;
+            var hcan = document.getElementById('hcanvas');
+            var hctx = hcan.getContext('2d');
+            hctx.drawImage(newImg, 0, 0, imgCoords['w'], imgCoords['h']);
+            $('#hcanvas').attr({'width':imgCoords['h'],
+                'height':imgCoords['w']});
+            hctx.translate(imgCoords['h'] / 2, imgCoords['w'] / 2); //FIX: WTF: 100px??????????????????
+            hctx.rotate(90 * Math.PI / 180);
+            hctx.drawImage(newImg, -imgCoords['w'] / 2, -imgCoords['h'] / 2, imgCoords['w'], imgCoords['h']);
+
+            var hiddenImg = hcan.toDataURL();
+            newImg.src = hiddenImg;
+            newImg.onload = function () {
+                var temp = imgCoords['h'];
+                imgCoords['h'] = imgCoords['w'];
+                imgCoords['w'] = temp;
+                imgCoords['x1'] = imgCoords['x'] + imgCoords['w'];
+                imgCoords['y1'] = imgCoords['y'] + imgCoords['h'];
+                if (imgCoords['x1'] > 733) {
+                    imgCoords['x1'] = 733;
+                    imgCoords['w'] = imgCoords['x1'] - imgCoords['x'];
+                }
+                if (imgCoords['y1'] > 881) {
+                    imgCoords['y1'] = 881;
+                    imgCoords['h'] = imgCoords['y1'] - imgCoords['y'];
+                }
+                workCtx.clea
+                workCtx.clearRect(0, 0, 733, 881);
+                setTimeout(function () {
+                    workCtx.drawImage(newImg, imgCoords['x'], imgCoords['y'], imgCoords['w'], imgCoords['h']);
+                    lock = false;
+                }, 50);
+                rotateFlag = true;
+                showResizers(imgCoords);
+            };
+            hctx.clearRect(0, 0, 733, 881);
+            $('#hcanvas').removeAttr('width');
+            $('#hcanvas').removeAttr('height');
+        }
+
+    }, false);
+
+
+    document.getElementById('rotateL').addEventListener('touchend', function (e) {
+        $('#btn-press').css({
+            'z-index':-9999,
+            'display':'none'
+        });
+    }, false);
+
+    document.getElementById('rotateR').addEventListener('touchend', function (e) {
+        $('#btn-press').css({
+            'z-index':-9999,
+            'display':'none'
+        });
+    }, false);
+//ADDING TEXT NOTE
+
+
+    document.getElementById('area').addEventListener('touchstart', function (e) {
+//        e.preventDefault();
+//        e.stopPropagation();
+        var touch = e.targetTouches[0];
+        x = touch.pageX - 18;
+        y = touch.pageY - 62;
+        deltaX = x - fieldCoord['x'];
+        deltaY = y - fieldCoord['y'];
+        textMove = true;
+        $('#area').css('font-size', $('#note-text-size').val() + 'px');
+        showResizers(fieldCoord);
+        redrawTextInsertDialog();
+
+    }, false);
+
+    document.getElementById('area').addEventListener('touchmove', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var touch = e.targetTouches[0];
+        x = touch.pageX - 18;
+        y = touch.pageY - 62;
+        if (textMove === true) {
+            fieldCoord['x'] = x - deltaX;
+            fieldCoord['y'] = y - deltaY;
+            fieldCoord['x1'] = fieldCoord['x'] + fieldCoord['w'];
+            fieldCoord['y1'] = fieldCoord['y'] + fieldCoord['h'];
+
+            if (fieldCoord['x1'] > 751) {
+                fieldCoord['x1'] = 751;
+                fieldCoord['x'] = fieldCoord['x1'] - fieldCoord['w'];
+            }
+            if (fieldCoord['y1'] > 941) {
+                fieldCoord['y1'] = 941;
+                fieldCoord['y'] = fieldCoord['y1'] - fieldCoord['h'];
+            }
+
+            if (fieldCoord['x'] <= 19) {
+                fieldCoord['x'] = 19;
+                fieldCoord['x1'] = fieldCoord['x'] + fieldCoord['w'];
+            }
+            if (fieldCoord['y'] <= 63) {
+                fieldCoord['y'] = 63;
+                fieldCoord['y1'] = fieldCoord['y'] + fieldCoord['h'];
+            }
+
+            $('#area').css({
+                'left':fieldCoord['x'] + 'px',
+                'top':fieldCoord['y'] + 'px',
+                'width':fieldCoord['w'] + 'px',
+                'height':fieldCoord['h'] + 'px'
+            });
+
+            showResizers(fieldCoord);
+            redrawTextInsertDialog();
+        }
+    }, false);
+
+    document.getElementById('area').addEventListener('touchend', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        textMove = false;
+        $('#area').focus();
+
+    }, false);
+
+    function limitHW(limit) {
+        if (fieldCoord['w'] < limit) {
+            fieldCoord['w'] = limit+300;
+			//ampliacion del ancho del texto
+            fieldCoord['x1'] = fieldCoord['x'] + fieldCoord['w'];
+            if (fieldCoord['x1'] > 751) {
+                fieldCoord['x1'] = 751;
+                fieldCoord['x'] = fieldCoord['x1'] - fieldCoord['w'];
+            }
+            if (fieldCoord['x'] < 19) {
+                fieldCoord['x'] = 19;
+                fieldCoord['x1'] = fieldCoord['x'] + fieldCoord['w'];
+            }
+        }
+        if (fieldCoord['h'] < limit) {
+            fieldCoord['h'] = limit;
+            fieldCoord['y1'] = fieldCoord['y'] + fieldCoord['h'];
+            if (fieldCoord['y1'] > 941) {
+                fieldCoord['y1'] = 941;
+                fieldCoord['y'] = fieldCoord['y1'] - fieldCoord['h'];
+            }
+            if (fieldCoord['y'] < 63) {
+                fieldCoord['y'] = 63;
+                fieldCoord['y1'] = fieldCoord['y'] + fieldCoord['h'];
+            }
+        }
+        $('#area').css({
+            'left':fieldCoord['x'] + 'px',
+            'top':fieldCoord['y'] + 'px',
+            'width':fieldCoord['w'] + 'px',
+            'height':fieldCoord['h'] + 'px'
+        });
+    }
+
+    document.getElementById('text_pegar').addEventListener('touchstart', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        $('#text-ins-dialog').css('background', 'url(images/paste-img-paste.png) no-repeat');
+        var str = $('#area').val();
+        if (editedNote === true) {
+            notes[editNoteNum].text = str;
+            notes[editNoteNum].x = fieldCoord['x'];
+            notes[editNoteNum].y = fieldCoord['y'];
+            notes[editNoteNum].x1 = fieldCoord['x1'];
+            notes[editNoteNum].y1 = fieldCoord['y1'];
+            notes[editNoteNum].w = fieldCoord['x1'] - fieldCoord['x'];
+            notes[editNoteNum].h = fieldCoord['y1'] - fieldCoord['y1'];
+            notes[editNoteNum].size = $('#note-text-size').val();
+            notes[editNoteNum].color = $('#note-color > .active').css('color');
+            notes[editNoteNum].isDel = false;
+
+            activeCtx[activeZi].putImageData(preTextPic, 0, 0);
+            for (var l = 0; l < notes.length; l++) {
+                drawNote(notes[l]);
+            }
+
+            $('#area').css({
+                'z-index':-9999
+            });
+            $('#area').val("");
+            fillUndoArray(activeZi);
+            redoArray[activeZi] = [];
+            hideResizers();
+            editedNote = false;
+
+        } else {
+            notes.push(new Object());
+            notes[textInd].text = str;
+            notes[textInd].x = fieldCoord['x'];
+            notes[textInd].y = fieldCoord['y'];
+            notes[textInd].x1 = fieldCoord['x1'];
+            notes[textInd].y1 = fieldCoord['y1'];
+            notes[textInd].w = fieldCoord['x1'] - fieldCoord['x'];
+            notes[textInd].h = fieldCoord['y1'] - fieldCoord['y1'];
+            notes[textInd].size = $('#note-text-size').val();
+            notes[textInd].color = $('#note-color > .active').css('color');
+            activeCtx[activeZi].putImageData(preTextPic, 0, 0);
+            for (var l = 0; l < notes.length; l++) {
+                drawNote(notes[l]);
+            }
+            textInd += 1;
+            isSomeNote = true;
+            fillUndoArray(activeZi);
+            redoArray[activeZi] = [];
+            $('#area').css({
+                'z-index':-9999,
+                'visibility':'hidden'
+            });
+            $('#area').val("");
+
+            hideResizers();
+            isSomeNotes = true;
+        }
+
+        setTimeout(function () {
+            $('#text-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+            $('#text-ins-dialog').css('z-index', -9999);
+            $('#area').blur();
+        }, 200);
+    });
+
+    function drawNote(note) {
+        if (note.isDel === true) {
+            return;
+        }
+        var drawStr = new Array();
+        var j = 1, z = 1;
+        var flag = true;
+        var k = Math.round(note.size * 0.5);
+        var areaWidth = note.w;
+        for (var i = 0; i < note.text.length; i++) {
+            if ((z * k) > areaWidth) {
+                z = 1;
+                j += 1;
+                flag = true;
+            }
+            if (note.text[i] != '\n') {
+                if (flag === true) {
+                    drawStr[j] = '';
+                    flag = false;
+                }
+                drawStr[j] += note.text[i];
+                z += 1;
+            } else {
+                z = 1;
+                j += 1;
+                flag = true;
+            }
+        }
+        activeCtx[activeZi].font = note.size + 'px Arial';
+        activeCtx[activeZi].fillStyle = note.color;
+        for (j = 1; j < drawStr.length; j++) {
+            if (drawStr[j]) {
+                activeCtx[activeZi].fillText(drawStr[j], note.x - 10, note.y - 55 + (note.size * j));
+            }
+        }
+    }
+
+    document.getElementById('text_cancelar').addEventListener('touchstart', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        $('#text-ins-dialog').css('background', 'url(images/paste-img-cancel.png) no-repeat');
+
+        if ($('#area').val().length > 0) {
+            $("#confirm-text-del").dialog({
+                resizable:false,
+                height:140,
+                zIndex:99999,
+                modal:true,
+                buttons:{
+                    "Si":function () {
+                        $(this).dialog("close");
+
+                        if (editedNote === true) {
+
+                            notes[editNoteNum].isDel = true;
+                            fillUndoArray(activeZi);
+                            redoArray[activeZi] = [];
+                            editedNote = false;
+                        } else {
+                            activeCtx[activeZi].putImageData(preTextPic, 0, 0);
+                            for (var l = 0; l < notes.length; l++) {
+                                drawNote(notes[l]);
+                            }
+//                            notes['editNoteNum'].isDel = true;
+                            fillUndoArray(activeZi);
+                            redoArray[activeZi] = [];
+                        }
+                        $('#area').val("");
+                        $('#area').css({
+                            'z-index':-9999,
+                            'visibility':'hidden'
+                        });
+                        $('.resizers').css({
+                            'z-index':-9999
+                        });
+                        setTimeout(function () {
+                            $('#text-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+                            $('#text-ins-dialog').css('z-index', -9999);
+                        }, 200);
+
+                    },
+                    "No":function () {
+                        $(this).dialog("close");
+                        $('#text-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+                    }
+                }
+            });
+        } else {
+            $('#area').val("");
+            if (editedNote === true) {
+                editedNote = false;
+            } else {
+            }
+            $('#area').css({
+                'z-index':-9999,
+                'visibility':'hidden'
+
+            });
+
+            $('.resizers').css({
+                'z-index':-9999
+            });
+
+            setTimeout(function () {
+                $('#text-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+                $('#text-ins-dialog').css('z-index', -9999);
+                $('#area').blur();
+            }, 200);
+
+        }
+
+
+    });
+
+
+    function activateButtons() {
+
+    }
+
+    //-----------------------------------------------------------
+    setInterval(function () {
+        var isEmpty = true;
+        for (var i = 0; i < isSomeChange.length; i++) {
+            if (isSomeChange[i] === true) {
+                $('#btn-save').css('background', 'url(images/save2.png) no-repeat 50% 100%');
+                isEmpty = false;
+                break;
+            }
+        }
+        if (isSomeChange[activeZi] === false) {
+            $('#btn-clear').css('background', 'url(images/clear2.png) no-repeat 50% 0');
+        } else {
+            $('#btn-clear').css('background', 'url(images/clear2.png) no-repeat 50% 100%');
+        }
+        if (isEmpty === true) {
+            $('#btn-save').css('background', 'url(images/save2.png) no-repeat 50% 0');
+        }
+        if (undoArray[activeZi].length > 1) {
+            $('#btn-undo').css('background', 'url(images/undo2.png) no-repeat 50% 100%');
+        } else {
+            $('#btn-undo').css('background', 'url(images/undo2.png) no-repeat 50% 0');
+        }
+        if (redoArray[activeZi].length > 0) {
+            $('#btn-redo').css('background', 'url(images/redo2.png) no-repeat 50% 100%');
+        } else {
+            $('#btn-redo').css('background', 'url(images/redo2.png) no-repeat 50% 0');
+        }
+        switch (action) {
+            case 'draw':
+                $('#mode').css('background', 'url(images/mode-pen.png) no-repeat 15% 50%');
+                break;
+            case 'text':
+                $('#mode').css('background', 'url(images/mode-text.png) no-repeat 15% 50%');
+                break;
+            case 'photo':
+                if (imgMode === 'camera') {
+                    $('#mode').css('background', 'url(images/mode-camera.png) no-repeat 15% 50%');
+                } else {
+                    $('#mode').css('background', 'url(images/mode-photo.png) no-repeat 15% 50%');
+                }
+                break;
+            case 'rubber':
+                $('#mode').css('background', 'url(images/mode-rubber.png) no-repeat 15% 50%');
+                break;
+            case 'noaction':
+                $('#mode').css('background', '#FFF');
+                break;
+            default:
+                $('#mode').css('background', '#FFF');
+                break;
+        }
+    }, 100);
+
+//MENU BUTTONS
+    for (var ind = 0; ind < document.getElementsByClassName('menu-item').length; ind++) {
+        var elem = document.getElementsByClassName('menu-item')[ind];
+        elem.addEventListener('touchstart', function (e) {
+            var x = Math.round($(e.target).offset().left);
+            var y = -3;
+            if ($(e.target).css('background-position') === '50% 100%') {
+                if ($(e.target).attr('id') === 'btn-save') {
+                    x = x + 8;
+                }
+                $('#btn-press').css({
+                    'z-index':9999,
+                    'left':x,
+                    'top':y,
+                    'display':'block'
+                });
+            }
+        }, false);
+
+        elem.addEventListener('touchend', function (e) {
+            $('#btn-press').css({
+                'z-index':-9999,
+                'display':'none'
+            });
+        }, false);
+    }
+
+
+    document.getElementById('btn-calendar').addEventListener('touchstart', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+  //      $('#dialog-confirm p').text('Do you want to save a new file?');
+	jConfirm('Salir?', 'Quiere guardar el fichero antes de salir?', function(r) {
+	
+	//alert(r);
+    if( r==true ) {
+	
+	btnSaveProc();
+	}
+	if( r==false ) {
+	
+	 document.location.href = 'calendar.html';
+	}
+});
+     /*   $("#dialog-confirm").dialog({
+            resizable:false,
+            height:140,
+            zIndex:9999,
+            modal:true,
+            buttons:{
+                "Si":function () {
+                    $(this).dialog("close");
+                    btnSaveProc();
+
+                },
+                "No":function () {
+                    $(this).dialog("close");
+                    document.location.href = 'calendar.html';
+                }
+            }
+        });*/
+
+    }, false);
+
+    document.getElementById('btn-pacients').addEventListener('touchstart', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+ //      $('#dialog-confirm p').text('Do you want to save a new file?');
+	jConfirm('Salir?', 'Quiere guardar el fichero antes de salir?', function(r) {
+	
+	//alert(r);
+    if( r==true ) {
+	
+	btnSaveProc();
+	}
+	if( r==false ) {
+	
+	 document.location.href = 'list.html';
+	}
+});
+     /*   $("#dialog-confirm").dialog({
+            resizable:false,
+            height:140,
+            zIndex:9999,
+            modal:true,
+            buttons:{
+                "Si":function () {
+                    $(this).dialog("close");
+                    btnSaveProc();
+
+                },
+                "No":function () {
+                    $(this).dialog("close");
+                    document.location.href = 'calendar.html';
+                }
+            }
+        });*/
+
+    }, false);
+
+    document.getElementById('btn-inbox').addEventListener('touchstart', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+ //      $('#dialog-confirm p').text('Do you want to save a new file?');
+	jConfirm('Salir?', 'Quiere guardar el fichero antes de salir?', function(r) {
+	
+	//alert(r);
+    if( r==true ) {
+	
+	btnSaveProc();
+	}
+	if( r==false ) {
+	
+	 document.location.href = 'folders.html';
+	}
+});
+     /*   $("#dialog-confirm").dialog({
+            resizable:false,
+            height:140,
+            zIndex:9999,
+            modal:true,
+            buttons:{
+                "Si":function () {
+                    $(this).dialog("close");
+                    btnSaveProc();
+
+                },
+                "No":function () {
+                    $(this).dialog("close");
+                    document.location.href = 'calendar.html';
+                }
+            }
+        });*/
+
+    }, false);
+
+
+    document.getElementById('btn-clear').addEventListener('touchstart', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (isSomeChange[activeZi] === true) {
+            changeDialog('clear');
+        }
+
+
+    }, false);
+
+    document.getElementById('clear-wrapper').addEventListener('touchstart', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        $('#area').val("");
+        $('#area').css({
+            'z-index':-9999,
+            'visibility':'hidden'
+
+        });
+
+        $('.resizers').css({
+            'z-index':-9999
+        });
+        $('#text-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+        $('#text-ins-dialog').css('z-index', -9999);
+        $('#area').blur();
+        workCtx.clearRect(0, 0, 733, 881);
+        $('#img-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+        $('#img-ins-dialog').css('visibility', 'hidden');
+        $('.rotator').css('z-index', '-9999');
+        rotateFlag = false;
+        $('#clear-wrapper #blur').css('display', 'none');
+        $('#clear-wrapper #focus').css('display', 'block');
+        activeCtx[activeZi].clearRect(0, 0, 733, 881);
+        fillUndoArray(activeZi);
+        redoArray[activeZi] = [];
+        clearNotes();
+        isSomeChange[activeZi] = false;
+        setTimeout(function () {
+            $('#clear-wrapper #focus').css('display', 'none');
+            $('#clear-wrapper #blur').css('display', 'block');
+            changeDialog('hide');
+            switch (preAction) {
+                case 'text':
+                    $('.resizers').css({
+                        'z-index':-9999
+                    });
+                    workCtx.clearRect(0, 0, 733, 881);
+                    $('#img-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+                    $('#img-ins-dialog').css('visibility', 'hidden');
+                    $('.rotator').css('z-index', '-9999');
+                    rotateFlag = false;
+                    action = 'text';
+                    preAction = action;
+                    preTextPic = activeCtx[activeZi].getImageData(0, 0, 733, 881);
+                    isSomeNote = false;
+                    break;
+                case 'draw':
+                    action = 'draw';
+                    break;
+                default:
+                    action = 'draw';
+                    break;
+            }
+        }, 200);
+
+    }, false);
+
+    function clearNotes() {
+        for (var i = 0; i < notes.length; i++) {
+            notes[i].text = "";
+        }
+    }
+
+    document.getElementById('btn-undo').addEventListener('touchstart', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (firstTime === true) {
+            activeCtx[activeZi].putImageData(undoArray[activeZi][undoArray[activeZi].length - 2], 0, 0);
+            firstTime = false;
+        } else {
+            activeCtx[activeZi].putImageData(undoArray[activeZi][undoArray[activeZi].length - 2], 0, 0);
+        }
+        isSomeChange[activeZi] = true;
+        fillRedoArray(activeZi);
+        $('#redo-size').text(undoArray[activeZi].length);
+
+
+    }, false);
+
+    function undoRedoInfo() {
+        var str = 'UNDO: ';
+        var str2 = 'REDO: ';
+        for (var i = 0; i < undoArray.length; i++) {
+            str += i + ' = ' + undoArray[i] + '<br />';
+        }
+        for (var i = 0; i < undoArray.length; i++) {
+            str2 += i + ' = ' + redoArray[i] + '<br />';
+        }
+        $('#redo-size').html(str + str2);
+    }
+
+    document.getElementById('btn-redo').addEventListener('touchstart', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        activeCtx[activeZi].putImageData(redoArray[activeZi][redoArray[activeZi].length - 1], 0, 0);
+        fillUndoArray(activeZi);
+        redoArray[activeZi].pop();
+    }, false);
+
+    document.getElementById('btn-pen').addEventListener('touchstart', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        changeDialog('pen');
+        if (action != 'draw') {
+            action = 'draw';
+            preAction = action;
+            clearNotes();
+        }
+    }, false);
+
+    document.getElementById('btn-rubber').addEventListener('touchstart', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        changeDialog('rubber');
+        if (action != 'rubber') {
+            action = 'rubber';
+            clearNotes();
+//            fillUndoArray(0, action);
+            //changeAction();
+        }
+    }, false);
+
+    document.getElementById('btn-text').addEventListener('touchstart', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        changeDialog('text');
+        if (action != 'text') {
+            $('.resizers').css({
+                'z-index':-9999
+            });
+            workCtx.clearRect(0, 0, 733, 881);
+            $('#img-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+            $('#img-ins-dialog').css('visibility', 'hidden');
+            $('.rotator').css('z-index', '-9999');
+            rotateFlag = false;
+            action = 'text';
+            preAction = action;
+            preTextPic = activeCtx[activeZi].getImageData(0, 0, 733, 881);
+            isSomeNote = false;
+        }
+    }, false);
+
+    //Inserting image from gallery
+    document.getElementById('btn-gal').addEventListener('touchstart', function (e) {
+        console.log("Vamos a insertar imagen desde la galeria");
+        e.stopPropagation();
+        e.preventDefault();
+        imgMode = 'gallery';
+        if (action != 'photo') {
+            clearNotes();
+            $('#area').val("");
+            $('#area').css({
+                'z-index':-9999,
+                'visibility':'hidden'
+
+            });
+
+            $('.resizers').css({
+                'z-index':-9999
+            });
+            $('#text-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+            $('#text-ins-dialog').css('z-index', -9999);
+            $('#area').blur();
+            action = 'photo';
+            changeDialog('hide');
+
+            navigator.camera.getPicture(onSuccess, onFail, {
+                sourceType:Camera.PictureSourceType.PHOTOLIBRARY,
+                destinationType: Camera.DestinationType.FILE_URI 
+            });
+
+            function onSuccess(imageUri) {
+                console.log("Tenemos una nueva imagen");
+                newImg = new Image();
+                newImg.onload = function () {
+                    console.log("Somo el onload de newImg");
+                    workCtx.drawImage(newImg, 60, 101, 600, 780);
+                    imgCoords['x'] = 60;
+                    imgCoords['y'] = 101;
+                    imgCoords['w'] = 600;
+                    imgCoords['h'] = 780;
+                    imgCoords['x1'] = imgCoords['x'] + imgCoords['w'];
+                    imgCoords['y1'] = imgCoords['y'] + imgCoords['h'];
+                    showResizers(imgCoords);
+                    redrawImgInsertDialog();
+                    $('#img-ins-dialog').css('visibility', 'visible');
+                    $('.rotator').css('z-index', '9999');
+                    $('.resizers').css('z-index', '9999');
+                };
+                newImg.src = imageUri;
+                //guardamos el uri para acceder a él posteriormente
+                imagenSrc = imageUri;
+                console.log("Foto de galeria cargada");
+                $('#btn-press').css({
+                    'z-index':-9999,
+                    'display':'none'
+                });
+            }
+
+            function onFail(message) {
+                action = 'draw';
+                $('#btn-press').css({
+                    'z-index':-9999,
+                    'display':'none'
+                });
+            }
+        }
+    }, false);
+
+
+    //Inserting image using camera
+    document.getElementById('btn-photo').addEventListener('touchstart', function (e) {
+        console.log("Vamos a insertar imagen desde la camara");
+        e.stopPropagation();
+        e.preventDefault();
+        imgMode = 'camera';
+        if (action != 'photo') {
+            clearNotes();
+            $('#area').val("");
+            $('#area').css({
+                'z-index':-9999,
+                'visibility':'hidden'
+
+            });
+
+            $('.resizers').css({
+                'z-index':-9999
+            });
+            $('#text-ins-dialog').css('background', 'url(images/paste-img.png) no-repeat');
+            $('#text-ins-dialog').css('z-index', -9999);
+            $('#area').blur();
+            action = 'photo';
+
+            navigator.camera.getPicture(onSuccess, onFail, {
+                quality:50,
+                destinationType: Camera.DestinationType.FILE_URI 
+            });
+
+            //function onSuccess(imageData) {
+            function onSuccess(imageUri) {
+                console.log("Teneos una foto en "+imageUri);
+                var newImg = new Image();
+                //esto ya está definido??
+                var workCtx = document.getElementById('temp_can').getContext('2d');
+                
+                newImg.onerror = function () {
+                    console.log("A fallado la carga de la imagen!!");
+                    
+                }
+                newImg.onload = function () {
+                    console.log("Somo el onload de newImg desde la camara");
+                    workCtx.drawImage(newImg, 60, 101, 600, 780);
+                    imgCoords['x'] = 60;
+                    imgCoords['y'] = 101;
+                    imgCoords['w'] = 600;
+                    imgCoords['h'] = 780;
+                    imgCoords['x1'] = imgCoords['x'] + imgCoords['w'];
+                    imgCoords['y1'] = imgCoords['y'] + imgCoords['h'];
+                    showResizers(imgCoords);
+                    redrawImgInsertDialog();
+                    $('#img-ins-dialog').css('visibility', 'visible');
+                    $('.rotator').css('z-index', '9999');
+                    $('.resizers').css('z-index', '9999');
+                };
+                
+                newImg.src = imageUri;
+                //guardamos el uri para acceder a él posteriormente
+                imagenSrc = imageUri;
+                console.log("Foto de camara guardada!");
+                $('#btn-press').css({
+                    'z-index':-9999,
+                    'display':'none'
+                });
+            }
+
+            function onFail(message) {
+                action = 'draw';
+                $('#btn-press').css({
+                    'z-index':-9999,
+                    'display':'none'
+                });
+            }
+        }
+    }, false);
+
+
+    var tags = new Array();
+
+
+    function btnSaveProc() {
+        if ($('#btn-save').css('background-position') === '50% 100%') {
+            $('#paciente').val(localStorage['name']);
+            tags = [];
+            $('#folder').empty();
+
+            $.ajax({
+                type:'POST',
+                url:server + 'getfolders.php',
+                success:function (message) {
+				if (message=='Access denied!'){
+				location.href = 'index.html';
+				}
+                    $('#folder').append(message);
+                }
+            });
+
+            $.ajax({
+                type:'POST',
+                url:server + 'gettags.php',
+                success:function (message) {
+                    var i = 0, str = '';
+                    tags.push("");
+                    for (var n = 0; n < message.length; n++) {
+                        if (message[n] != ',') {
+                            tags[i] += message[n];
+                        } else {
+                            tags.push("");
+                            i += 1;
+                        }
+                    }
+                }
+            });
+
+            $('#save-file').css({
+                'display':'block',
+                'z-index':200
+            });
+            lookForOrientation();
+            var z = 0, pageCount = 0, f = 1;
+
+            for (var i = 0; i < isSomeChange.length; i++) {
+                if (isSomeChange[i] === true) {
+                    pageCount += 1;
+                }
+            }
+
+            function drawImgToSaveDialog(id, iter) {
+                var canId = 'can' + iter;
+                var temp = document.getElementById(canId).toDataURL();
+                var imgId = 'page' + (id);
+                var img = new Image();
+                img.setAttribute('id', imgId);
+                img.setAttribute('class', 'save-image');
+                img.setAttribute('height', '225px');
+                img.setAttribute('width', '185px');
+                var newDiv = document.createElement('div');
+                var newCheckbox = document.createElement('div');
+                var newSpan = document.createElement('span');
+                var spanId = 'span' + (id);
+                newSpan.setAttribute('id', spanId);
+                $(newSpan).text('Pagina ' + (id) + ' de ' + pageCount);
+                newDiv.setAttribute('class', 'save-page');
+                newDiv.setAttribute('id', 'div-' + imgId);
+                newDiv.appendChild(img);
+                newDiv.appendChild(newSpan);
+                newCheckbox.setAttribute('id', 'check-' + imgId);
+                newCheckbox.setAttribute('class', 'save-page-checkbox-on');
+                newCheckbox.setAttribute('name', 'checkme');
+                $(newCheckbox).data('id', imgId);
+                img.src = temp;
+                $('#save-content').append(newDiv);
+
+                var pos = $(newDiv).offset();
+                $(newCheckbox).css({
+                    'left':pos.left - 16,
+                    'top':pos.top - 16
+                });
+                $(newDiv).append(newCheckbox);
+                newDiv.addEventListener('touchstart', function (e) {
+                    if ($(this).find('#check-' + imgId).attr('class') === 'save-page-checkbox-on') {
+                        $(this).find('#check-' + imgId).attr('class', 'save-page-checkbox-off');
+                    } else {
+                        $(this).find('#check-' + imgId).attr('class', 'save-page-checkbox-on');
+                    }
+                }, false);
+            }
+
+            for (var i = 0; i < 10; i++) {
+                if (isSomeChange[i] === true) {
+                    drawImgToSaveDialog(f, i);
+                    f += 1;
+                }
+            }
+        } else {
+
+        }
+    }
+
+    var guardarInterval;
+    var canSave = true;
+    document.getElementById('btn-save').addEventListener('touchstart', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        btnSaveProc();
+        guardarInterval = setInterval(function () {
+            var i = 0;
+            $('.save-page').each(function () {
+                if ($(this).find('div[name="checkme"]').attr('class') === 'save-page-checkbox-on') {
+                    i += 1;
+                }
+            });
+            if (i > 0) {
+                $('#guardar').attr('src', 'images/guardar2-blur.png');
+                $('#selectall').data('issel', 'sel');
+                $('#selectall').attr('src', 'images/deselectall2-tap.png');
+                canSave = true;
+            } else {
+                $('#guardar').attr('src', 'images/guardar2-grey.png')
+                $('#selectall').data('issel', 'desel');
+                $('#selectall').attr('src', 'images/selectall2-tap.png');
+                canSave = false;
+            }
+        }, 200);
+    }, false);
+
+    document.getElementById('save-content').addEventListener('touchstart', function (e) {
+        $('#guardar-dialog').css('display', 'none');
+        $('#tags').autocomplete('close');
+    }, false);
+
+    document.getElementById('selectall').addEventListener('touchstart', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if ($('#selectall').data('issel') === 'sel') {
+            $('#selectall').attr('src', 'images/deselectall2-tap.png');
+            $('.save-page-checkbox-on').each(function () {
+                $(this).attr('class', 'save-page-checkbox-off');
+            });
+            setTimeout(function () {
+                $('#selectall').attr('src', 'images/selectall2.png');
+                $('#selectall').data('issel', 'desel');
+            }, 200);
+        } else {
+            $('#selectall').attr('src', 'images/selectall2-tap.png');
+            $('.save-page-checkbox-off').each(function () {
+                $(this).attr('class', 'save-page-checkbox-on');
+            });
+            setTimeout(function () {
+                $('#selectall').attr('src', 'images/deselectall2.png');
+                $('#selectall').data('issel', 'sel');
+            }, 200);
+        }
+    }, false);
+
+    document.getElementById('atras').addEventListener('touchend', function () {
+        $('#save-content').empty();
+        $('#atras').attr('src', 'images/atras-focus.png');
+        setTimeout(function () {
+            $('#atras').attr('src', 'images/atras-blur.png');
+            clearInterval(guardarInterval);
+            setTimeout(function () {
+                $('#save-file').css({
+                    'display':'none',
+                    'z-index':-99999
+                });
+                lookForOrientation();
+            }, 100);
+        }, 100);
+    }, false);
+
+    document.getElementById('guardar').addEventListener('touchend', function () {
+        if (canSave === true) {
+            $('#guardar').attr('src', 'images/guardar2-focus.png');
+
+            $('#guardar-dialog').css({'display':'block'});
+
+            $.ajax({
+                url:server + 'getname.php',
+                data:{'name':localStorage['nowDate']},
+                success:function (message) {
+				if (message=='Access denied!'){
+				location.href = 'index.html';
+				}
+                    $('#nombre').val(message);
+                }
+            });
+
+            setTimeout(function () {
+                $('#guardar').attr('src', 'images/guardar2-blur.png');
+            }, 200);
+        }
+    }, false);
+
+    var guardarFlag = false;
+    $('#dialog-guardar').click(function () {
+        console.log("Vamos a guardar!");
+        if(guardarFlag === false){
+            guardarFlag = true;
+            $('#dialog-guardar').attr('src', 'images/guardar2-dialog-focus.png');
+            var number = 1;
+            var exitNumber = 1;
+            var pagesCount = 0;
+            var updateFinFlag = 0;
+            $('.save-page-checkbox-on').each(function () {
+                pagesCount += 1;
+            });
+            var randomName = randomString(32);
+            $('.save-page-checkbox-on').each(function () {
+                var imgId = $(this).data('id');
+                console.log("Buscamos el contenido de la imagen "+imgId);
+                var imageData = document.getElementById(imgId).src;//.slice(23);
+                $.ajax({
+                    type:'POST',
+                    url:server + 'upload.php',
+                    data:{'randomname':randomName, 'page':number, 'title':$('#nombre').val(), 'tags':$('#tags').val(), 'idpatient':localStorage['id'], 'idfolder':$('#folder').val(), 'foldername':$('#folder option:selected').text(), 'img':imageData},
+                    complete:function (message) {
+                        console.log("Ajax-complete");
+                        if (pagesCount === exitNumber) {
+                            setTimeout(function () {
+                                $('#dialog-guardar').attr('src', 'images/guardar2-dialog-blur.png');
+                                $('#guardar-dialog').css({'display':'none'});
+                                localStorage['idfolder'] = $('#folder').val();
+                                location.href = 'files.html';
+                            }, 1000);
+                        }
+                        exitNumber += 1;
+                    }
+                });
+                number += 1;
+            });
+        }
+
+    });
+
+    function randomString(length) {
+        var chars = '0123456789abcdefghiklmnopqrstuvwxyz'.split('');
+
+        if (!length) {
+            length = Math.floor(Math.random() * chars.length);
+        }
+
+        var str = '';
+        for (var i = 0; i < length; i++) {
+            str += chars[Math.floor(Math.random() * chars.length)];
+        }
+        return str;
+    }
+
+    $('#dialog-cancelar').click(function () {
+        $('#dialog-cancelar').attr('src', 'images/cancel2-dialog-focus.png');
+        $('#tags').autocomplete('close');
+        setTimeout(function () {
+            $('#dialog-cancelar').attr('src', 'images/cancel2-dialog-blur.png');
+            $('#guardar-dialog').css({'display':'none'});
+        }, 200);
+    });
+
+
+//    window.onorientationchange = function () {
+//        var orientation = window.orientation;
+//        switch (orientation) {
+//            case 90:
+//                $('#content').css('width', '1024px');
+//                $('body').css('width', '1024px');
+//                if ($('#save-file').css('display') === 'block') {
+//                    $('#filler').css({
+//                        'display':'none'
+//                    });
+//                } else {
+//                    $('#filler').css({
+//                        'display':'block',
+//                        'height':'933px'
+//                    });
+//                }
+//                $('#table-filler').css('display', 'block');
+//                $('#save-filler').css('display', 'block');
+//                break;
+//            case -90:
+//                $('#content').css('width', '1024px');
+//                $('body').css('width', '1024px');
+//                if ($('#save-file').css('display') === 'block') {
+//                    $('#filler').css({
+//                        'display':'none'
+//                    });
+//                } else {
+//                    $('#filler').css({
+//                        'display':'block',
+//                        'height':'933px'
+//                    });
+//                }
+//                $('#table-filler').css('display', 'block');
+//                $('#save-filler').css('display', 'block');
+//                break;
+//            case 0:
+//                $('#content').css('width', '768px');
+//                $('body').css('width', '768px');
+//                $('#filler').css('display', 'none');
+//                $('#table-filler').css('display', 'none');
+//                $('#save-filler').css('display', 'none');
+//                break;
+//            case 180:
+//                $('#content').css('width', '768px');
+//                $('body').css('width', '768px');
+//                $('#filler').css('display', 'none');
+//                $('#table-filler').css('display', 'none');
+//                $('#save-filler').css('display', 'none');
+//                break;
+//        }
+//    }
+
+    document.getElementById('nombre').addEventListener('keypress', function (e) {
+        var strLength = $('#nombre').val().length;
+        if (e.which === 47 || e.which === 60 || e.which === 62 || e.which === 63 || e.which === 92 || e.which === 124 || strLength >= 20) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, false);
+
+    var options;
+
+    document.getElementById('tags').addEventListener('keypress', function (e) {
+        var strLength = $('#tags').val().length;
+        if (e.which === 47 || e.which === 60 || e.which === 62 || e.which === 63 || e.which === 92 || e.which === 124 || strLength >= 20) {
+            e.preventDefault();
+            e.stopPropagation();
+        } else {
+        }
+    }, false);
+
+    function split(val) {
+        return val.split(/,\s*/);
+    }
+
+    function extractLast(term) {
+        return split(term).pop();
+    }
+
+    $("#tags")
+        // don't navigate away from the field on tab when selecting an item
+            .bind("keydown", function (event) {
+                if (event.keyCode === $.ui.keyCode.TAB &&
+                        $(this).data("autocomplete").menu.active) {
+                    event.preventDefault();
+                }
+            })
+            .autocomplete({
+                minLength:0,
+                source:function (request, response) {
+                    // delegate back to autocomplete, but extract the last term
+                    response($.ui.autocomplete.filter(
+                            tags, extractLast(request.term)));
+                },
+                focus:function () {
+                    // prevent value inserted on focus
+                    return false;
+                },
+                select:function (event, ui) {
+                    var terms = split(this.value);
+                    // remove the current input
+                    terms.pop();
+                    // add the selected item
+                    terms.push(ui.item.value);
+                    // add placeholder to get the comma-and-space at the end
+                    terms.push("");
+                    this.value = terms.join(", ");
+                    return false;
+                }
+            });
+
+    setInterval(function () {
+        var nom = $('#nombre').val();
+        var tag = $('#tags').val();
+        //var re = /\/|\$|,|@|#|~|`|\%|\*|\^|\&|\(|\)|\+|\=|\[|\-|\_|\]|\[|\}|\{|\;|\:|\'|\"|\<|\>|\?|\||\\|\!|\$|\./g;
+        var re = /\/|\<|\>|\?|\||\\|[а-яА-ЯёЁ]/g;
+        var filtNom = nom.replace(re, '');
+        var filtTag = tag.replace(re, '');
+        $('#nombre').val(filtNom);
+        $('#tags').val(filtTag);
+    }, 40);
+
+    $('#color > div').bind('click', function () {
+        $('#color > div').each(function () {
+            $(this).removeClass('active');
+        });
+        $(this).addClass('active');
+        ctx.strokeStyle = $('#color > .active').css('color');
+        ctx.lineWidth = $('#text-size').val();
+    });
+
+
+    $('#note-color > div').bind('click', function () {
+        $('#note-color > div').each(function () {
+            $(this).removeClass('active');
+        });
+        $(this).addClass('active');
+        ctx.strokeStyle = $('#note-color > .active').css('color');
+        ctx.lineWidth = $('#note-text-size').val();
+        $('#area').css('color', $('#note-color > .active').css('color'));
+    });
+
+    $('#rubber-size').change(function () {
+        if ($(this).val() > 1) {
+            $('#rubber-wrapper .blue-bar').css('display', 'block');
+        }
+        if ($(this).val() > 17) {
+            $(this).attr('step', '8');
+            $(this).val('25');
+            $('#rubber-wrapper .size-val').text($(this).val());
+        } else {
+            $(this).attr('step', '2');
+        }
+
+        switch ($(this).val()) {
+            case '1':
+                $('#rubber-wrapper .blue-bar').css('display', 'none');
+                break;
+            case '3':
+                var newWidth = 12;
+                break;
+            case '5':
+                var newWidth = 26;
+                break;
+            case '7':
+                var newWidth = 40;
+                break;
+            case '9':
+                var newWidth = 54;
+                break;
+            case '11':
+                var newWidth = 68;
+                break;
+            case '13':
+                var newWidth = 82;
+                break;
+            case '15':
+                var newWidth = 97;
+                break;
+            case '17':
+                var newWidth = 111;
+                break;
+            case '25':
+                var newWidth = 167;
+                break;
+        }
+        newWidth += 'px';
+        $('#rubber-wrapper .blue-bar').css('width', newWidth);
+        $('#rubber-wrapper .size-val').text($(this).val());
+    });
+
+    $('#note-text-size').change(function () {
+        if ($(this).val() > 10) {
+            $('#note-font .blue-bar').css('display', 'block');
+        }
+        if ($(this).val() < 12) {
+            $(this).attr('step', '1');
+            $('#note-font .size-val').text($(this).val());
+        }
+        if ($(this).val() >= 12) {
+            $(this).attr('step', '2');
+            $('#note-font .size-val').text($(this).val());
+        }
+        if ($(this).val() >= 22) {
+            $(this).attr('step', '4');
+        }
+
+        switch ($(this).val()) {
+            case '10':
+                $('#note-font .blue-bar').css('display', 'none');
+                break;
+            case '11':
+                var newWidth = 6;
+                break;
+            case '12':
+                var newWidth = 14;
+                break;
+            case '14':
+                var newWidth = 31;
+                break;
+            case '16':
+                var newWidth = 48;
+                break;
+            case '18':
+                var newWidth = 65;
+                break;
+            case '20':
+                var newWidth = 82;
+                break;
+            case '22':
+                var newWidth = 100;
+                break;
+            case '26':
+                var newWidth = 133;
+                break;
+            case '30':
+                var newWidth = 167;
+                break;
+        }
+        newWidth += 'px';
+        $('#note-font .blue-bar').css('width', newWidth);
+
+    });
+
+    //Change brush size
+    $('#text-size').change(function () {
+        if ($(this).val() > 1) {
+            $('#font .blue-bar2').css('display', 'block');
+        }
+        if ($(this).val() > 17) {
+            $(this).attr('step', '8');
+            $(this).val('25');
+            $('#font .size-val').text($(this).val());
+        } else {
+            $(this).attr('step', '2');
+        }
+
+        switch ($(this).val()) {
+            case '1':
+                $('#font .blue-bar2').css('display', 'none');
+                break;
+            case '3':
+                var newWidth = 12;
+                break;
+            case '5':
+                var newWidth = 26;
+                break;
+            case '7':
+                var newWidth = 40;
+                break;
+            case '9':
+                var newWidth = 54;
+                break;
+            case '11':
+                var newWidth = 68;
+                break;
+            case '13':
+                var newWidth = 82;
+                break;
+            case '15':
+                var newWidth = 97;
+                break;
+            case '17':
+                var newWidth = 111;
+                break;
+            case '25':
+                var newWidth = 167;
+                break;
+        }
+        newWidth += 'px';
+        $('#font .blue-bar2').css('width', newWidth);
+        $('#font .size-val').text($(this).val());
+        ctx.lineWidth = $(this).val();
+    });
+
+    $('#note-text-size').change(function () {
+        $('#note-font .size-val').text($(this).val());
+        $('#area').css('font-size', $(this).val() + 'px');
+    });
+
+//HELPER'S FUNCTIONS
+
+    function lookForOrientation(){
+        var orientation = window.orientation;
+        switch (orientation) {
+            case 90:
+                $('#content').css('width', '1024px');
+                $('body').css('width', '1024px');
+                if ($('#save-file').css('display') === 'block') {
+//                    $('#content').css('display','none');
+
+                    $('#save-file').css('width','1035px');
+                    $('#save-table-filler').css('display','block');
+                    $('#save-filler').css('display','block');
+                    $('#content').css('height', '1300px');
+                } else {
+                    $('#filler').css({
+                        'display':'block',
+                        'height':'933px'
+                    });
+                    $('#content').css('height', '768px');
+                }
+                $('#table-filler').css('display', 'block');
+
+                break;
+            case -90:
+                $('#content').css('width', '1024px');
+                $('body').css('width', '1024px');
+                if ($('#save-file').css('display') === 'block') {
+//                    $('#content').css('display','none');
+
+                    $('#save-file').css('width','1035px');
+                    $('#save-table-filler').css('display','block');
+                    $('#save-filler').css('display','block');
+                    $('#content').css('height', '1300px');
+                } else {
+                    $('#filler').css({
+                        'display':'block',
+                        'height':'933px'
+                    });
+                    $('#content').css('height', '768px');
+                }
+                $('#table-filler').css('display', 'block');
+                break;
+            case 0:
+                $('#content').css('width', '768px');
+
+//                $('#content').css('display','block');
+
+                $('body').css('width', '768px');
+                $('#filler').css('display', 'none');
+                $('#table-filler').css('display', 'none');
+                $('#content').css('height', '1024px');
+                $('#save-file').css('width','768px');
+                $('#save-filler').css('display','none');
+                $('#save-table-filler').css('display','none');
+                break;
+            case 180:
+                $('#content').css('width', '768px');
+
+//                $('#content').css('display','block');
+
+                $('body').css('width', '768px');
+                $('#filler').css('display', 'none');
+                $('#table-filler').css('display', 'none');
+                $('#content').css('height', '1024px');
+                $('#save-file').css('width','768px');
+                $('#save-filler').css('display','none');
+                $('#save-table-filler').css('display','none');
+                break;
+        }
+    }
+
+    window.onorientationchange = function () {
+        lookForOrientation();
+    }
+
+    function changeDialog(name) {
+        switch (name) {
+            case 'pen':
+                $('#rubber-dialog').fadeOut('slow');
+                $('#clr-fnt-dialog').fadeToggle('slow');
+                $('#note-dialog').fadeOut('slow');
+                $('#clear-dialog').fadeOut('slow');
+                break;
+            case 'rubber':
+                $('#rubber-dialog').fadeToggle('slow');
+                $('#clr-fnt-dialog').fadeOut('slow');
+                $('#note-dialog').fadeOut('slow');
+                $('#clear-dialog').fadeOut('slow');
+                break;
+            case 'text':
+                $('#rubber-dialog').fadeOut('slow');
+                $('#clr-fnt-dialog').fadeOut('slow');
+                $('#note-dialog').fadeToggle('slow');
+                $('#clear-dialog').fadeOut('slow');
+                break;
+            case 'hide':
+                $('#rubber-dialog').fadeOut('slow');
+                $('#clr-fnt-dialog').fadeOut('slow');
+                $('#note-dialog').fadeOut('slow');
+                $('#clear-dialog').fadeOut('slow');
+                break;
+            case 'clear':
+                $('#rubber-dialog').fadeOut('slow');
+                $('#clr-fnt-dialog').fadeOut('slow');
+                $('#note-dialog').fadeOut('slow');
+                $('#clear-dialog').fadeToggle('slow');
+                break;
+
+        }
+    }
+
+    function hideResizers() {
+        $('.resizers').css({
+            'z-index':'-9999',
+            'visibility':'hidden'
+        });
+    }
+
+    function redrawTextInsertDialog() {
+        var x = fieldCoord['x'] + fieldCoord['w'] / 2 - 38;
+        var y = fieldCoord['y'] - 70;
+        if (x < 0) {
+            x = 0;
+        }
+        if (y < 0) {
+            y = 3;
+        }
+        if (x > 605) {
+            x = 605;
+        }
+        if (y > 770) {
+            y = 770;
+        }
+        $('#text-ins-dialog').css({
+            'left':x,
+            'top':y
+        });
+    }
+
+    function redrawImgInsertDialog() {
+        var x = imgCoords['x'] + imgCoords['w'] / 2 - 24;
+        var y = imgCoords['y'] - 5;
+        if (x < 0) {
+            x = 0;
+        }
+        if (y < 0) {
+            y = 3;
+        }
+        if (x > 605) {
+            x = 605;
+        }
+
+
+        $('#img-ins-dialog').css({
+            'left':x,
+            'top':y
+        });
+    }
+
+    function showResizers(coords) {
+        $('.resizers').css({
+            'z-index':'9999',
+            'visibility':'visible'
+        });
+
+        var rSizeX = 18;
+        var rSizeY = 62;
+        var r = 10;
+        if (action === 'text') {
+            rSizeX = 0;
+            rSizeY = 0;
+            r = 15;
+        }
+
+        if (coords['w'] < 30) {
+            coords['w'] = 30;
+
+        }
+        if (coords['h'] < 30) {
+            coords['h'] = 30;
+
+        }
+        $('#tl_res').css({
+            'left':coords['x'] + rSizeX - r + 'px',
+            'top':coords['y'] + rSizeY - r + 'px'
+        });
+        $('#tm_res').css({
+            'left':coords['x'] + (coords['x1'] - coords['x']) / 2 + rSizeX / 2 - r + 'px',
+            'top':coords['y'] + rSizeY - r + 'px'
+        });
+        $('#tr_res').css({
+            'left':coords['x1'] + rSizeX / 2 - r + 5 + 'px',
+            'top':coords['y'] + rSizeY - r + 'px'
+        });
+        $('#ml_res').css({
+            'left':coords['x'] + rSizeX - r + 'px',
+            'top':coords['y'] + (coords['y1'] - coords['y']) / 2 + rSizeY - r + 'px'
+        });
+        $('#mr_res').css({
+            'left':coords['x1'] + rSizeX / 2 - r + 5 + 'px',
+            'top':coords['y'] + (coords['y1'] - coords['y']) / 2 + rSizeY - r + 'px'
+        });
+        $('#bl_res').css({
+            'left':coords['x'] + rSizeX - r + 'px',
+            'top':coords['y1'] + rSizeY / 2 + r + 'px'
+        });
+        $('#bm_res').css({
+            'left':coords['x'] + (coords['x1'] - coords['x']) / 2 + rSizeX / 2 - r + 'px',
+            'top':coords['y1'] + rSizeY / 2 + r + 'px'
+        });
+        $('#br_res').css({
+            'left':coords['x1'] + rSizeX / 2 - r + 5 + 'px',
+            'top':coords['y1'] + rSizeY / 2 + r + 'px'
+        });
+
+        if (action === 'text') {
+            $('#tl_res').css({
+                'left':coords['x'] + rSizeX - r + 'px',
+                'top':coords['y'] + rSizeY - r + 'px'
+            });
+            $('#tm_res').css({
+                'left':coords['x'] + (coords['x1'] - coords['x']) / 2 + rSizeX / 2 - r + 'px',
+                'top':coords['y'] + rSizeY - r + 'px'
+            });
+            $('#tr_res').css({
+                'left':coords['x1'] + rSizeX / 2 - r + 5 + 'px',
+                'top':coords['y'] + rSizeY - r + 'px'
+            });
+            $('#ml_res').css({
+                'left':coords['x'] + rSizeX - r + 'px',
+                'top':coords['y'] + (coords['y1'] - coords['y']) / 2 + rSizeY - r + 'px'
+            });
+            $('#mr_res').css({
+                'left':coords['x1'] + rSizeX / 2 - r + 5 + 'px',
+                'top':coords['y'] + (coords['y1'] - coords['y']) / 2 + rSizeY - r + 'px'
+            });
+            $('#bl_res').css({
+                'left':coords['x'] + rSizeX - r + 'px',
+                'top':coords['y1'] + rSizeY / 2 - r + 3 + 'px'
+            });
+            $('#bm_res').css({
+                'left':coords['x'] + (coords['x1'] - coords['x']) / 2 + rSizeX / 2 - r + 'px',
+                'top':coords['y1'] + rSizeY / 2 - r + 3 + 'px'
+            });
+            $('#br_res').css({
+                'left':coords['x1'] + rSizeX / 2 - r + 5 + 'px',
+                'top':coords['y1'] + rSizeY / 2 - r + 3 + 'px'
+            });
+        }
+
+    }
+
+});
+
+</script>
+
+
+</head>
+<body>
+<header>
+    <div id="wnd-header">
+        <table border="0">
+            <tr id="panel">
+                <td width="17px" class="menu-item">
+                </td>
+                <td width="51px" class="menu-item" id="btn-calendar">
+                </td>
+                <td width="51px" class="menu-item" id="btn-pacients">
+                </td>
+                <td width="51px" class="menu-item" id="btn-inbox">
+                </td>
+                <td width="30px" class="menu-item">
+                </td>
+                <td width="51px" style="text-align: center;" class="menu-item" id="btn-clear">
+                </td>
+                <td width="51px" style="text-align: left;" class="menu-item" id="btn-undo">
+                </td>
+                <td width="51px" style="text-align: right;" class="menu-item" id="btn-redo">
+                </td>
+                <td width="30px" class="menu-item">
+                </td>
+                <td width="51px" style="text-align: left;" class="menu-item" id="btn-pen">
+                </td>
+                <td width="51px" style="text-align: center;" class="menu-item" id="btn-rubber">
+                </td>
+                <td width="51px" style="text-align: center;" class="menu-item" id="btn-text">
+                </td>
+                <td width="51px" style="text-align: center;" class="menu-item" id="btn-gal">
+                </td>
+                <td width="51px" style="text-align: center;" class="menu-item" id="btn-photo">
+                </td>
+                <td width="50px" class="menu-item">
+                </td>
+                <td width="61px" style="text-align: left;" class="menu-item" id="btn-save">
+                </td>
+                <td width="17px" class="menu-item">
+                </td>
+                <td id="table-filler"></td>
+            </tr>
+        </table>
+    </div>
+    <div id="wnd-canvas">
+        <div id="clr-fnt-dialog">
+            <div id="color">
+                <div style="background: -webkit-gradient(linear, left top, left bottom, from(#f1cabb), to(#e2001a)); color:#e2001a; border: 1px solid #b01825;"></div>
+                <div style="background: -webkit-gradient(linear, left top, left bottom, from(#fdf6d3), to(#feec09)); color:#feec09; border: 1px solid #e8d47c;"></div>
+                <div style="background: -webkit-gradient(linear, left top, left bottom, from(#b5cfb2), to(#009036));color:#009036; border: 1px solid #05752f;"></div>
+                <div style="background: -webkit-gradient(linear, left top, left bottom, from(#a2cbdd), to(#009ee0));color:#009ee0; border: 1px solid #0387be;"></div>
+                <div style="background: -webkit-gradient(linear, left top, left bottom, from(#727db1), to(#172983));color:#172983; border: 1px solid #0d1a58;"></div>
+                <div style="background: -webkit-gradient(linear, left top, left bottom, from(#edc6d5), to(#e2007a));color:#e2007a; border: 1px solid #9b0255;"></div>
+                <div  class="active"
+                     style="background: -webkit-gradient(linear, left top, left bottom, from(#949494), to(#000));color:#000; border: 1px solid #000;"></div>
+            </div>
+            <div id="font">
+                <div class="blue-bar2"></div>
+                <input type="range" min="1" step="2" max="25" value="2" name="text-size" id="text-size"/>
+                <span class="size-val">2</span>
+            </div>
+        </div>
+
+        <div id="note-dialog">
+            <div id="note-color">
+                <div style="background: -webkit-gradient(linear, left top, left bottom, from(#f1cabb), to(#e2001a)); color:#e2001a; border: 1px solid #b01825;"></div>
+                <div style="background: -webkit-gradient(linear, left top, left bottom, from(#fdf6d3), to(#feec09)); color:#feec09; border: 1px solid #e8d47c;"></div>
+                <div style="background: -webkit-gradient(linear, left top, left bottom, from(#b5cfb2), to(#009036));color:#009036; border: 1px solid #05752f;"></div>
+                <div style="background: -webkit-gradient(linear, left top, left bottom, from(#a2cbdd), to(#009ee0));color:#009ee0; border: 1px solid #0387be;"></div>
+                <div style="background: -webkit-gradient(linear, left top, left bottom, from(#727db1), to(#172983));color:#172983; border: 1px solid #0d1a58;"></div>
+                <div style="background: -webkit-gradient(linear, left top, left bottom, from(#edc6d5), to(#e2007a));color:#e2007a; border: 1px solid #9b0255;"></div>
+                <div class="active"
+                     style="background: -webkit-gradient(linear, left top, left bottom, from(#949494), to(#000));color:#000; border: 1px solid #000;"></div>
+            </div>
+            <div id="note-font">
+                <div class="blue-bar"></div>
+                <input type="range" min="10" step="1" max="30" value="20" name="text-size" id="note-text-size"/>
+                <span class="size-val">20</span>
+            </div>
+        </div>
+
+        <div id="rubber-dialog">
+            <div id="rubber-wrapper">
+                <div class="blue-bar"></div>
+                <input type="range" min="1" step="2" max="25" value="5" name="text-size" id="rubber-size"/>
+                <span class="size-val">5</span>
+            </div>
+        </div>
+
+        <div id="clear-dialog">
+            <div id="clear-wrapper">
+                <img src="images/clear-all-btn-blur.png" id="blur"/>
+                <img src="images/clear-all-btn-focus.png" id="focus" style="display:none;"/>
+            </div>
+        </div>
+
+        <div id="img-ins-dialog">
+            <div id="img_pegar"></div>
+            <div id="img_cancelar"></div>
+        </div>
+
+        <div id="text-ins-dialog">
+            <div id="text_pegar"></div>
+            <div id="text_cancelar"></div>
+        </div>
+    </div>
+</header>
+
+
+<div id="content">
+    <div id="white-bg" width="733" height="881">
+    </div>
+    <canvas id="can0" width="733" height="881" style="z-index:10;" class="draw-canvas"></canvas>
+    <canvas id="can1" width="733" height="881" style="z-index:11;" class="draw-canvas"></canvas>
+    <canvas id="can2" width="733" height="881" style="z-index:12;" class="draw-canvas"></canvas>
+    <canvas id="can3" width="733" height="881" style="z-index:13;" class="draw-canvas"></canvas>
+    <canvas id="can4" width="733" height="881" style="z-index:14;" class="draw-canvas"></canvas>
+    <canvas id="can5" width="733" height="881" style="z-index:15;" class="draw-canvas"></canvas>
+    <canvas id="can6" width="733" height="881" style="z-index:16;" class="draw-canvas"></canvas>
+    <canvas id="can7" width="733" height="881" style="z-index:17;" class="draw-canvas"></canvas>
+    <canvas id="can8" width="733" height="881" style="z-index:18;" class="draw-canvas"></canvas>
+    <canvas id="can9" width="733" height="881" style="z-index:19;" class="draw-canvas"></canvas>
+
+    <canvas id="temp_can" width="733" height="881"></canvas>
+    <div id="status-bar">
+        <table style="border: 0px;margin-top:5px;">
+            <tr style="border: 0px;">
+                <td id="mode" width="20%" style="padding-left:20px;"></td>
+                <td id="pages" width="60%" style="text-align: center; padding: 10px 0 10px 0;">1 / 1</td>
+                <td id="nowDate" width="20%" style="padding-right:20px;text-align: right;"></td>
+            </tr>
+        </table>
+    </div>
+
+    <canvas id="hcanvas" class="hidden_can"></canvas>
+
+    <div id="rotateL" class="rotator"></div>
+    <div id="rotateR" class="rotator"></div>
+
+    <textarea id="area" cols="15" rows="15"></textarea>
+
+    <div id="tl_res" class="resizers"></div>
+    <div id="tm_res" class="resizers"></div>
+    <div id="tr_res" class="resizers"></div>
+    <div id="ml_res" class="resizers"></div>
+    <div id="mr_res" class="resizers"></div>
+    <div id="bl_res" class="resizers"></div>
+    <div id="bm_res" class="resizers"></div>
+    <div id="br_res" class="resizers"></div>
+
+    <div id="filler"></div>
+
+
+</div>
+
+<div id="save-file">
+    <header>
+        <div id="wnd-header">
+            <table border="0">
+                <tr id="panel">
+                    <td width="25px">
+                    </td>
+                    <td width="60px">
+                        <img src="images/atras-blur.png" width="59" height="30" id="atras" style="padding-top: 5px;">
+                    </td>
+
+                    <td width="410px">
+                    </td>
+
+                    <td width="170px" style="text-align: center;">
+                        <img src="images/deselectall2.png" height="29" id="selectall" style="padding-top: 5px;"
+                             data-issel="sel">
+                    </td>
+
+                    <td width="71px">
+                        <img src="images/guardar2-blur.png" width="73" height="29" id="guardar"
+                             style="padding-top: 5px;">
+                    </td>
+
+                    <td width="25px">
+                    </td>
+                    <td id="save-table-filler"></td>
+                </tr>
+            </table>
+        </div>
+        <div id="wnd-canvas">
+            <div id="guardar-dialog">
+                <input type="text" id="nombre" placeholder="< filename >" class="filename" autocorrect="off">
+
+                <div id="tags-wrapper" class="ui-widget">
+                    <input id="tags" class="ui-autocomplete-input" placeholder="< tags >" class="filename"
+                           autocorrect="off">
+                </div>
+                <input type="text" id="paciente" readonly value="">
+                <select id="folder">
+                </select>
+                <img src="images/guardar2-dialog-blur.png" width="71" height="30" id="dialog-guardar">
+                <img src="images/cancel2-dialog-blur.png" width="71" height="30" id="dialog-cancelar">
+            </div>
+        </div>
+    </header>
+    <div id="save-content">
+    </div>
+    <div id="save-filler"><div id="filler-bg"></div></div>
+</div>
+
+<footer>
+    <div id="dialog-confirm" title="">
+        <p><span class="ui-icon ui-icon-alert" style="float:left; margin:0 7px 20px 0;"></span>Quieres salir?
+        </p>
+    </div>
+    <div id="confirm-img-del" title="Delete image">
+        <p><span class="ui-icon ui-icon-alert" style="float:left; margin:0 7px 20px 0;"></span>Est&aacute;s seguro de que quieres eliminar la imagen?</p>
+    </div>
+    <div id="confirm-text-del" title="Delete text note">
+        <p><span class="ui-icon ui-icon-alert" style="float:left; margin:0 7px 20px 0;"></span>Est&aacute;s seguro de que quieres eliminar la nota de texto?</p>
+    </div>
+    <div id="dialog-no-actions" title="You have reached the actions limit">
+        <p><span class="ui-icon ui-icon-alert" style="float:left; margin:0 7px 20px 0;"></span>Quieres guardar la imagen?</p>
+    </div>
+    <div id="btn-press"></div>
+</footer>
+</body>
+</html>

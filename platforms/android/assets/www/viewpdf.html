@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1"/>
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, user-scalable=0, minimum-scale=1.0, maximum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <title>Patients List - files</title>
+    <link rel="stylesheet" type="text/css" media="screen, projection" href="css/pacient.css"/>
+    <script type="application/javascript" src="js/iscroll.js?v4"></script>
+    <script src="js/jquery-1.7.min.js"></script>
+    <script src="js/config.js"></script>
+    <script type="text/javascript">
+
+ $(document).ready(function () {
+			ruta=localStorage['idfile2'];
+
+	message='<iframe width="100%" border="0" height="600" src="http://docs.google.com/viewer?url='+ruta+'"></iframe>';
+
+		var myString = ruta;
+
+		var mySplitResult = myString.split("/");
+ 		mySplitResult[5]
+		$('#visor').append(message);
+		 $('#infor').append(localStorage['patientinfo']+' / '+mySplitResult[5]);
+        });
+                        
+
+    </script>
+
+</head>
+<body>
+
+<div id="header">
+
+    <div class="group1"><a id="prev" href="files.html"><img src="arrow-left.png" width="23" height="23" alt=""/></a></div>
+    	    <div class="group3"><a href="http://www.orttech.net/" target="_blank" rel="external"><img src="intra.png"  alt=""/></a></div>
+<div class="group4" id="infor"></div>
+
+</div>
+
+
+
+<div style="text-align: left; border: none;" id="visor">
+
+
+</div>
+
+ </body>
+
+</html>

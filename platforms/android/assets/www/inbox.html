@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="apple-mobile-web-app-capable" content="yes"/>
+    <meta name="viewport" content="width=device-width, user-scalable=no"/>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title></title>
+    <link rel="stylesheet" href="css/all1.css"/>
+    <script src="js/jquery-1.7.min.js"></script>
+    <script src="phonegap.js"></script>
+
+
+    <script>
+
+        $(document).ready(function() {
+
+            document.getElementById('content').addEventListener('touchstart',function(){
+                $('#guardar-dialog').css('display','none');
+            },false);
+
+            document.getElementById('atras').addEventListener('touchend', function() {
+//        e.preventDefault();
+//        e.stopPropagation();
+                $('#atras').attr('src', 'images/atras-focus.png');
+                setTimeout(function() {
+                    $('#atras').attr('src', 'images/atras-blur.png');
+                    setTimeout(function() {
+                        document.location.href = 'index.html';
+                    }, 500);
+                }, 200);
+            }, false);
+
+            document.getElementById('guardar').addEventListener('touchend', function() {
+//        e.preventDefault();
+//        e.stopPropagation();
+                $('#guardar').attr('src', 'images/guardar2-focus.png');
+
+                $('#guardar-dialog').css({'display':'block'});
+
+                setTimeout(function() {
+                    $('#guardar').attr('src', 'images/guardar2-blur.png');
+                }, 200);
+            }, false);
+
+//    document.getElementById('dialog-guardar').addEventListener('touchend',function(){
+//        e.preventDefault();
+//        e.stopPropagation();
+            $('#dialog-guardar').click(function() {
+                $('#dialog-guardar').attr('src', 'images/guardar2-dialog-focus.png');
+                setTimeout(function() {
+                    $('#dialog-guardar').attr('src', 'images/guardar2-dialog-blur.png');
+                    $('#guardar-dialog').css({'display':'none'});
+                }, 200);
+            });
+//    },false);
+
+//     document.getElementById('dialog-cancelar').addEventListener('touchend',function(){
+//        e.preventDefault();
+//        e.stopPropagation();
+            $('#dialog-cancelar').click(function() {
+                $('#dialog-cancelar').attr('src', 'images/cancel2-dialog-focus.png');
+                setTimeout(function() {
+                    $('#dialog-cancelar').attr('src', 'images/cancel2-dialog-blur.png');
+                    $('#guardar-dialog').css({'display':'none'});
+                }, 200);
+            });
+
+
+            window.onorientationchange = function() {
+                var orientation = window.orientation;
+                switch (orientation) {
+                    case 90:
+                        $('#content').css('width', '1024px');
+                        $('body').css('width', '1024px');
+                        $('#filler').css('display', 'block');
+                        $('#table-filler').css('display', 'block');
+
+                        break;
+                    case -90:
+                        $('#content').css('width', '1024px');
+                        $('body').css('width', '1024px');
+                        $('#filler').css('display', 'block');
+                        $('#table-filler').css('display', 'block');
+                        break;
+                    case 0:
+                        $('#content').css('width', '768px');
+                        $('body').css('width', '768px');
+                        $('#filler').css('display', 'none');
+                        $('#table-filler').css('display', 'none');
+                        break;
+                    case 180:
+                        $('#content').css('width', '768px');
+                        $('body').css('width', '768px');
+                        $('#filler').css('display', 'none');
+                        $('#table-filler').css('display', 'none');
+                        break;
+                }
+            }
+
+            document.getElementById('nombre').addEventListener('keypress', function(e) {
+                var strLength = $('#nombre').val().length;
+                if (e.which === 47 || e.which === 60 || e.which === 62 || e.which === 63 || e.which === 92 || e.which === 124 || strLength >= 20) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }, false);
+            document.getElementById('tags').addEventListener('keypress', function(e) {
+                var strLength = $('#tags').val().length;
+                if (e.which === 47 || e.which === 60 || e.which === 62 || e.which === 63 || e.which === 92 || e.which === 124 || strLength >= 20) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }, false);
+
+            setInterval(function() {
+                var nom = $('#nombre').val();
+                var tag = $('#tags').val();
+                //var re = /\/|\$|,|@|#|~|`|\%|\*|\^|\&|\(|\)|\+|\=|\[|\-|\_|\]|\[|\}|\{|\;|\:|\'|\"|\<|\>|\?|\||\\|\!|\$|\./g;
+                var re = /\/|\<|\>|\?|\||\\|[а-яА-ЯёЁ]/g;
+                var filtNom = nom.replace(re,'');
+                var filtTag = tag.replace(re,'');
+                $('#nombre').val(filtNom);
+                $('#tags').val(filtTag);
+            }, 40);
+        });
+
+    </script>
+</head>
+<body>
+<header>
+    <div id="wnd-header">
+        <table border="0">
+            <tr id="panel">
+                <td width="25px">
+                </td>
+                <td width="60px">
+                    <img src="images/atras-blur.png" width="59" height="30" id="atras" style="padding-top: 5px;">
+                </td>
+
+                <td width="580px">
+                </td>
+
+                <td width="71px">
+                    <img src="images/guardar2-blur.png" width="73" height="29" id="guardar" style="padding-top: 5px;">
+                </td>
+
+                <td width="25px">
+                </td>
+                <td id="table-filler"></td>
+            </tr>
+        </table>
+    </div>
+    <div id="wnd-canvas">
+        <div id="guardar-dialog">
+            <input type="text" id="nombre" placeholder="< filename >" class="filename" autocorrect="off">
+            <input type="text" id="tags" placeholder="< tags >" class="filename" autocorrect="off">
+            <input type="text" id="paciente" readonly value="Juan Luis Garcia">
+            <select id="department">
+                <option>Radiology</option>
+                <option>Neurology</option>
+                <option>Surgery1</option>
+            </select>
+            <img src="images/guardar2-dialog-blur.png" width="71" height="30" id="dialog-guardar">
+            <img src="images/cancel2-dialog-blur.png" width="71" height="30" id="dialog-cancelar">
+        </div>
+    </div>
+</header>
+<div id="content">
+    <div id="filler"></div>
+</div>
+</body>
+</html>
